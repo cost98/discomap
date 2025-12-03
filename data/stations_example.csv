@@ -1,0 +1,6 @@
+sampling_point_id,station_name,station_type,area_type,latitude,longitude,altitude,country_code
+IT/SPO.IT0508A_5_nephelometry_beta_2020-01-01_00:00:00,Milano Corso Buenos Aires,traffic,urban,45.4808,9.2040,122,IT
+IT/SPO.IT0502A_8_chemi_2005-12-08_00:00:00,Milano Via Senato,background,urban,45.4732,9.2001,120,IT
+IT/SPO.IT0840A_8_chemi_1999-11-01_00:00:00,Roma Villa Ada,background,urban,41.9301,12.5015,60,IT
+IT/SPO.IT1739A_8_chemi_2006-04-08_00:00:00,Torino Lingotto,traffic,urban,45.0328,7.6649,239,IT
+IT/SPO.IT0778A_8_chemi_1991-06-01_00:00:00,Napoli Via Argine,industrial,urban,40.8566,14.2986,10,IT

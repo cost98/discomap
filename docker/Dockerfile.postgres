@@ -1,0 +1,25 @@
+# Dockerfile for PostgreSQL with TimescaleDB extension
+# Optimized for air quality time-series data
+
+FROM timescale/timescaledb:latest-pg16
+
+# Set environment variables
+ENV POSTGRES_DB=discomap \
+    POSTGRES_USER=discomap \
+    POSTGRES_PASSWORD=changeme \
+    TIMESCALEDB_TELEMETRY=off
+
+# Copy initialization scripts
+COPY docker/postgres/init-db.sql /docker-entrypoint-initdb.d/01-init-db.sql
+COPY docker/postgres/create-tables.sql /docker-entrypoint-initdb.d/02-create-tables.sql
+COPY docker/postgres/create-hypertables.sql /docker-entrypoint-initdb.d/03-create-hypertables.sql
+COPY docker/postgres/04-sync-tracking.sql /docker-entrypoint-initdb.d/04-sync-tracking.sql
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD pg_isready -U $POSTGRES_USER -d $POSTGRES_DB
+
+# Labels
+LABEL maintainer="cosimo <cost98@github>" \
+      description="DiscoMap PostgreSQL + TimescaleDB for air quality data" \
+      version="1.0.0"

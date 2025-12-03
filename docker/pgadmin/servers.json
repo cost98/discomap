@@ -1,0 +1,15 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "DiscoMap PostgreSQL",
+      "Group": "Servers",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "discomap",
+      "Username": "discomap",
+      "Password": "changeme",
+      "SSLMode": "prefer",
+      "Comment": "DiscoMap air quality database with TimescaleDB"
+    }
+  }
+}

@@ -1,0 +1,122 @@
+{
+  "last_sync": "2025-11-30T19:25:38.851404",
+  "last_full_sync": "2025-11-30T18:15:18.877366",
+  "sync_history": [
+    {
+      "timestamp": "2025-11-26T20:19:09.531407",
+      "type": "custom_urls",
+      "error": "Failed to download URLs: 400 Client Error: Bad Request for url: https://eeadmz1-downloads-api-appservice.azurewebsites.net/ParquetFile/urls",
+      "status": "failed"
+    },
+    {
+      "timestamp": "2025-11-26T20:19:26.221101",
+      "type": "custom_urls",
+      "error": "Failed to download URLs: 400 Client Error: Bad Request for url: https://eeadmz1-downloads-api-appservice.azurewebsites.net/ParquetFile/urls",
+      "status": "failed"
+    },
+    {
+      "timestamp": "2025-11-26T20:19:35.377592",
+      "type": "custom_urls",
+      "error": "Failed to download URLs: 400 Client Error: Bad Request for url: https://eeadmz1-downloads-api-appservice.azurewebsites.net/ParquetFile/urls",
+      "status": "failed"
+    },
+    {
+      "timestamp": "2025-11-26T20:19:37.339831",
+      "type": "custom_urls",
+      "error": "Failed to download URLs: 400 Client Error: Bad Request for url: https://eeadmz1-downloads-api-appservice.azurewebsites.net/ParquetFile/urls",
+      "status": "failed"
+    },
+    {
+      "timestamp": "2025-11-26T20:19:41.937519",
+      "type": "custom_urls",
+      "error": "Failed to download URLs: 400 Client Error: Bad Request for url: https://eeadmz1-downloads-api-appservice.azurewebsites.net/ParquetFile/urls",
+      "status": "failed"
+    },
+    {
+      "timestamp": "2025-11-26T20:36:05.989527",
+      "type": "custom_urls",
+      "error": "Failed to download URLs: 400 Client Error: Bad Request for url: https://eeadmz1-downloads-api-appservice.azurewebsites.net/ParquetFile/urls",
+      "status": "failed"
+    },
+    {
+      "timestamp": "2025-11-26T20:37:10.449908",
+      "type": "custom_urls",
+      "error": "Failed to download URLs: 400 Client Error: Bad Request for url: https://eeadmz1-downloads-api-appservice.azurewebsites.net/ParquetFile/urls",
+      "status": "failed"
+    },
+    {
+      "timestamp": "2025-11-26T20:41:16.918777",
+      "type": "custom_urls",
+      "error": "Failed to download URLs: 400 Client Error: Bad Request for url: https://eeadmz1-downloads-api-appservice.azurewebsites.net/ParquetFile/urls",
+      "status": "failed"
+    },
+    {
+      "timestamp": "2025-11-26T21:07:17.021736",
+      "type": "custom_urls",
+      "records": 0,
+      "status": "success"
+    },
+    {
+      "timestamp": "2025-11-26T21:25:39.047803",
+      "type": "custom_urls",
+      "records": 0,
+      "status": "success"
+    },
+    {
+      "timestamp": "2025-11-26T21:46:51.773766",
+      "type": "custom_urls",
+      "records": 0,
+      "status": "success"
+    },
+    {
+      "timestamp": "2025-11-26T22:24:16.174403",
+      "type": "custom_urls",
+      "records": 510583,
+      "status": "success"
+    },
+    {
+      "timestamp": "2025-11-27T21:53:21.211050",
+      "type": "full",
+      "error": "Failed to download data: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))",
+      "status": "failed"
+    },
+    {
+      "timestamp": "2025-11-30T18:06:09.422355",
+      "type": "full",
+      "records": 0,
+      "status": "success"
+    },
+    {
+      "timestamp": "2025-11-30T18:15:18.877366",
+      "type": "full",
+      "records": 0,
+      "status": "success"
+    },
+    {
+      "timestamp": "2025-11-30T18:19:37.983131",
+      "type": "incremental",
+      "records": 0,
+      "status": "success"
+    },
+    {
+      "timestamp": "2025-11-30T18:25:55.512877",
+      "type": "custom_urls",
+      "records": 167403,
+      "status": "success"
+    },
+    {
+      "timestamp": "2025-11-30T19:16:03.196937",
+      "type": "custom_urls",
+      "records": 0,
+      "status": "success"
+    },
+    {
+      "timestamp": "2025-11-30T19:25:38.851404",
+      "type": "custom_urls",
+      "records": 167413,
+      "status": "success"
+    }
+  ],
+  "total_records": 845399,
+  "failed_attempts": 0
+}

@@ -793,6 +793,31 @@ class SyncScheduler:
                 logger.error(f"   ❌ Database insertion failed: {db_error}")
                 # Continue even if DB insert fails - data is already saved to file
 
+            # Cleanup: delete ZIP file and temp files
+            try:
+                logger.info(f"   🗑️  Cleaning up temporary files...")
+                if zip_path.exists():
+                    zip_path.unlink()
+                    logger.info(f"   ✅ Deleted ZIP: {zip_path.name}")
+                
+                # Delete processed file (already in DB)
+                if output_file.exists():
+                    output_file.unlink()
+                    logger.info(f"   ✅ Deleted processed: {output_file.name}")
+                
+                # Also cleanup temp directory
+                temp_dir = Config.get_temp_dir()
+                import shutil
+                if temp_dir.exists():
+                    for item in temp_dir.iterdir():
+                        if item.is_file():
+                            item.unlink()
+                        elif item.is_dir():
+                            shutil.rmtree(item)
+                    logger.info(f"   ✅ Cleaned temp directory")
+            except Exception as cleanup_error:
+                logger.warning(f"   ⚠️  Cleanup failed: {cleanup_error}")
+
             logger.info(f"✅ Processing complete: {cleaned_count:,} total records")
             return (initial_count, inserted)
 

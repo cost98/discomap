@@ -40,7 +40,7 @@ jobs:
     
     - name: Test import
       run: |
-        python -c "from src import downloader, parser, analyzer, validators; print('✅ All imports OK')"
+        python -c "from src import downloader, parser, analyzer, validators; print('All imports OK')"
 
   lint:
     name: Code Quality

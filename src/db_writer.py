@@ -233,10 +233,29 @@ class PostgreSQLWriter:
             station_data = []
             for _, row in points.iterrows():
                 sp_id = row["Samplingpoint"]
+                import re
+                
+                # Handle different formats:
+                # IT: IT/SPO.IT0508A_8_chemi_1990...
+                # ES: ES/SP_01022001_10_47
+                # PT: PT/SPO-PT01023_00005_100
                 if "/SPO." in sp_id:
-                    # Extract station code: IT/SPO.IT0508A_8_chemi_1990... -> IT0508A
-                    import re
+                    # IT format: extract IT0508A
                     match = re.search(r'SPO\.([A-Z]{2}[0-9]+[A-Z]?)_', sp_id)
+                    if match:
+                        station_code = match.group(1)
+                        country_code = sp_id.split("/")[0]
+                        station_data.append((station_code, country_code))
+                elif "/SPO-" in sp_id:
+                    # PT format: extract PT01023 from PT/SPO-PT01023_00005_100
+                    match = re.search(r'SPO-([A-Z]{2}[0-9]+)_', sp_id)
+                    if match:
+                        station_code = match.group(1)
+                        country_code = sp_id.split("/")[0]
+                        station_data.append((station_code, country_code))
+                elif "/SP_" in sp_id:
+                    # ES format: extract 01022001 from ES/SP_01022001_10_47
+                    match = re.search(r'/SP_([0-9]+)_', sp_id)
                     if match:
                         station_code = match.group(1)
                         country_code = sp_id.split("/")[0]
@@ -246,7 +265,7 @@ class PostgreSQLWriter:
             station_data = list(set(station_data))
             if station_data:
                 cursor.executemany(station_query, station_data)
-                logger.info(f"✅ Upserted {cursor.rowcount} stations")
+                logger.info(f"✅ Upserted {len(station_data)} stations ({cursor.rowcount} new)")
 
             # Now insert sampling points with extracted metadata
             sp_query = """
@@ -264,8 +283,9 @@ class PostgreSQLWriter:
                 station_code = None
                 instrument_type = None
                 
+                import re
                 if "/SPO." in sp_id:
-                    import re
+                    # IT format: IT/SPO.IT0508A_8_chemi_1990...
                     # Extract station code
                     station_match = re.search(r'SPO\.([A-Z]{2}[0-9]+[A-Z]?)_', sp_id)
                     if station_match:
@@ -273,6 +293,30 @@ class PostgreSQLWriter:
                     
                     # Extract instrument type: IT0508A_8_chemi_1990... -> 8_chemi
                     instrument_match = re.search(r'[A-Z]{2}[0-9]+[A-Z]?_([^_]+_[^_]+)_[0-9]{4}', sp_id)
+                    if instrument_match:
+                        instrument_type = instrument_match.group(1)
+                
+                elif "/SPO-" in sp_id:
+                    # PT format: PT/SPO-PT01023_00005_100
+                    # Extract station code: PT01023
+                    station_match = re.search(r'SPO-([A-Z]{2}[0-9]+)_', sp_id)
+                    if station_match:
+                        station_code = station_match.group(1)
+                    
+                    # Extract instrument type: 00005_100 (last two parts)
+                    instrument_match = re.search(r'_([0-9]+_[0-9]+)$', sp_id)
+                    if instrument_match:
+                        instrument_type = instrument_match.group(1)
+                
+                elif "/SP_" in sp_id:
+                    # ES format: ES/SP_01022001_10_47
+                    # Extract station code: 01022001
+                    station_match = re.search(r'/SP_([0-9]+)_', sp_id)
+                    if station_match:
+                        station_code = station_match.group(1)
+                    
+                    # Extract instrument type: 10_47 (last two parts)
+                    instrument_match = re.search(r'_([0-9]+_[0-9]+)$', sp_id)
                     if instrument_match:
                         instrument_type = instrument_match.group(1)
                 

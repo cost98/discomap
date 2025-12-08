@@ -75,6 +75,7 @@ class SyncRequest(BaseModel):
     start_date: Optional[str] = Field(None, description="Start date (YYYY-MM-DD) for custom sync")
     end_date: Optional[str] = Field(None, description="End date (YYYY-MM-DD) for custom sync")
     days: Optional[int] = Field(None, description="Number of days to sync (alternative to dates)")
+    dataset: Optional[int] = Field(None, description="Force dataset: 1=E2a (2025+), 2=E1a (2013-2024), 3=Airbase (2002-2012). Auto-detects if not specified.")
     max_workers: int = Field(8, description="Parallel download workers")
 
 
@@ -128,6 +129,7 @@ def run_sync_task(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     days: Optional[int] = None,
+    dataset: Optional[int] = None,
     max_workers: int = 8,
 ):
     """Run sync in background."""
@@ -142,6 +144,10 @@ def run_sync_task(
         scheduler = SyncScheduler(test_mode=False)
         scheduler.config["countries"] = countries
         scheduler.config["pollutants"] = pollutants
+        if dataset:
+            scheduler.config["dataset"] = dataset
+            from src.config import DATASET_NAMES
+            logger.info(f"📦 Forcing dataset: {DATASET_NAMES.get(dataset, f'Dataset {dataset}')}")
 
         # Run appropriate sync - always use URL-based method
         success = False
@@ -184,10 +190,8 @@ def run_sync_task(
             if not start_date or not end_date:
                 raise ValueError("Custom sync requires start_date and end_date")
 
-            # Always use URL-based download (safer for large datasets)
-            success = scheduler.sync_custom_period_urls(
-                start_date, end_date, max_workers=max_workers
-            )
+            # Use sync_custom_period (auto-detects or uses forced dataset)
+            success = scheduler.sync_custom_period(start_date, end_date)
         else:
             raise ValueError(f"Unknown sync type: {sync_type}")
 
@@ -287,6 +291,7 @@ async def start_sync(request: SyncRequest, background_tasks: BackgroundTasks):
         start_date=request.start_date,
         end_date=request.end_date,
         days=request.days,
+        dataset=request.dataset,
         max_workers=request.max_workers,
     )
 

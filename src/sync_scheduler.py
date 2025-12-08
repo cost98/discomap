@@ -387,6 +387,7 @@ class SyncScheduler:
     ) -> bool:
         """
         Perform sync for a custom date range.
+        Uses dataset specified in self.config["dataset"].
         
         Args:
             start_date: Start date (ISO format: YYYY-MM-DDTHH:MM:SSZ or YYYY-MM-DD)
@@ -400,17 +401,6 @@ class SyncScheduler:
         logger.info(f"📅 Starting CUSTOM PERIOD SYNC")
         logger.info("=" * 60)
 
-        # Start tracking operation
-        operation_id = self.db_writer.start_sync_operation(
-            operation_type=sync_type,
-            metadata={
-                "countries": self.config["countries"],
-                "pollutants": self.config["pollutants"],
-                "start_date": start_date,
-                "end_date": end_date,
-            },
-        )
-
         try:
             # Normalize dates to ISO format if needed
             if len(start_date) == 10:  # YYYY-MM-DD
@@ -422,19 +412,38 @@ class SyncScheduler:
             logger.info(f"🌍 Countries: {', '.join(self.config['countries'])}")
             logger.info(f"🏭 Pollutants: {', '.join(self.config['pollutants'])}")
 
+            # Use dataset from config
+            from src.config import DATASET_NAMES
+            dataset = self.config.get("dataset", Config.DATASET_E2A)
+            dataset_name = DATASET_NAMES.get(dataset, f"Dataset {dataset}")
+            logger.info(f"📦 Using dataset: {dataset_name}")
+
+            # Start tracking operation
+            operation_id = self.db_writer.start_sync_operation(
+                operation_type=sync_type,
+                metadata={
+                    "countries": self.config["countries"],
+                    "pollutants": self.config["pollutants"],
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "dataset": dataset,
+                    "dataset_name": dataset_name,
+                },
+            )
+
             if self.test_mode:
                 logger.info("⚠️  TEST MODE - No actual download")
                 self.db_writer.complete_sync_operation(operation_id, 0, 0)
                 return True
 
-            # Download data for custom period
-            filename = f"sync_custom_{start_date[:10]}_{end_date[:10]}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+            # Download data
+            filename = f"sync_{sync_type}_{start_date[:10]}_{end_date[:10]}_dataset{dataset}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
             download_start = datetime.now()
 
             zip_path = self.downloader.download(
                 countries=self.config["countries"],
                 pollutants=self.config["pollutants"],
-                dataset=self.config["dataset"],
+                dataset=dataset,
                 datetime_start=start_date,
                 datetime_end=end_date,
                 aggregation_type=self.config["aggregation"],
@@ -840,17 +849,27 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python scripts/sync_scheduler.py                    # Full sync (last 7 days)
+  # Standard syncs (use E2a by default)
+  python scripts/sync_scheduler.py                    # Full sync (last 7 days, E2a)
   python scripts/sync_scheduler.py --incremental      # Sync since last run
   python scripts/sync_scheduler.py --hourly           # Quick hourly sync
   python scripts/sync_scheduler.py --status           # Show sync status
   python scripts/sync_scheduler.py --test             # Test mode (no download)
   
-  # Custom period syncs (historical data)
-  python scripts/sync_scheduler.py --days 30                                    # Last 30 days
-  python scripts/sync_scheduler.py --start-date 2025-01-01 --end-date 2025-01-31  # January 2025
-  python scripts/sync_scheduler.py --start-date 2024-11-01 --end-date 2024-11-30 --countries IT FR ES  # Multiple countries
-  python scripts/sync_scheduler.py --days 90 --pollutants NO2 PM10             # Last 90 days, specific pollutants
+  # Custom period syncs with dataset selection
+  python scripts/sync_scheduler.py --days 30 --dataset 1                                          # Last 30 days (E2a)
+  python scripts/sync_scheduler.py --start-date 2025-01-01 --end-date 2025-01-31 --dataset 1     # January 2025 (E2a)
+  python scripts/sync_scheduler.py --start-date 2024-01-01 --end-date 2024-12-31 --dataset 2     # Full 2024 (E1a)
+  python scripts/sync_scheduler.py --start-date 2020-01-01 --end-date 2023-12-31 --dataset 2     # Historical (E1a)
+  
+  # Filter by countries/pollutants
+  python scripts/sync_scheduler.py --start-date 2024-11-01 --end-date 2024-11-30 --dataset 2 --countries IT FR ES
+  python scripts/sync_scheduler.py --days 90 --dataset 1 --pollutants NO2 PM10
+  
+Datasets (must specify with --dataset):
+  1 = E2a (Up-To-Date): 2025+ data, unverified, near real-time [DEFAULT]
+  2 = E1a (Verified): 2013-2024 data, verified, reported annually by Sep 30
+  3 = Airbase (Historical): 2002-2012 data, pre-directive
   
 Scheduling:
   Windows Task Scheduler:
@@ -889,6 +908,14 @@ Scheduling:
         help="Number of days to sync (from end-date or now, going backwards)",
     )
     parser.add_argument(
+        "--dataset",
+        type=int,
+        choices=[1, 2, 3],
+        required=False,
+        default=1,
+        help="Dataset: 1=E2a (UTD, 2025+), 2=E1a (Verified, 2013-2024), 3=Airbase (2002-2012). Default: 1 (E2a)",
+    )
+    parser.add_argument(
         "--use-urls",
         action="store_true",
         help="Use URL-based download (more reliable for large date ranges, downloads files in parallel)",
@@ -910,6 +937,10 @@ Scheduling:
         scheduler.config["countries"] = args.countries
     if args.pollutants:
         scheduler.config["pollutants"] = args.pollutants
+    if args.dataset:
+        scheduler.config["dataset"] = args.dataset
+        from src.config import DATASET_NAMES
+        logger.info(f"📦 Using dataset: {DATASET_NAMES.get(args.dataset, f'Dataset {args.dataset}')}")
 
     # Show status and exit
     if args.status:

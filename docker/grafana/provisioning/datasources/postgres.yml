@@ -1,0 +1,19 @@
+apiVersion: 1
+
+datasources:
+  - name: postgres-ds
+    type: postgres
+    access: proxy
+    url: postgres:5432
+    database: discomap
+    user: discomap
+    jsonData:
+      sslmode: disable
+      postgresVersion: 1600
+      timescaledb: true
+      database: discomap
+    secureJsonData:
+      password: ${POSTGRES_PASSWORD}
+    isDefault: true
+    editable: false
+    uid: postgres-ds

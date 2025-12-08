@@ -76,6 +76,7 @@ class SyncRequest(BaseModel):
     end_date: Optional[str] = Field(None, description="End date (YYYY-MM-DD) for custom sync")
     days: Optional[int] = Field(None, description="Number of days to sync (alternative to dates)")
     dataset: Optional[int] = Field(None, description="Force dataset: 1=E2a (2025+), 2=E1a (2013-2024), 3=Airbase (2002-2012). Auto-detects if not specified.")
+    use_urls: bool = Field(False, description="Use URL-based download (more stable for large requests)")
     max_workers: int = Field(8, description="Parallel download workers")
 
 
@@ -130,6 +131,7 @@ def run_sync_task(
     end_date: Optional[str] = None,
     days: Optional[int] = None,
     dataset: Optional[int] = None,
+    use_urls: bool = False,
     max_workers: int = 8,
 ):
     """Run sync in background."""
@@ -144,6 +146,8 @@ def run_sync_task(
         scheduler = SyncScheduler(test_mode=False)
         scheduler.config["countries"] = countries
         scheduler.config["pollutants"] = pollutants
+        scheduler.config["use_urls"] = use_urls
+        scheduler.config["max_workers"] = max_workers
         if dataset:
             scheduler.config["dataset"] = dataset
             from src.config import DATASET_NAMES
@@ -292,6 +296,7 @@ async def start_sync(request: SyncRequest, background_tasks: BackgroundTasks):
         end_date=request.end_date,
         days=request.days,
         dataset=request.dataset,
+        use_urls=request.use_urls,
         max_workers=request.max_workers,
     )
 

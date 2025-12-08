@@ -144,6 +144,7 @@ class SyncScheduler:
             "aggregation": Config.AGG_HOURLY,
             "lookback_days": 7,  # Default lookback period
             "hourly_lookback_hours": 2,  # For hourly syncs
+            "use_urls": False,  # Use URL-based download for large requests
         }
 
         logger.info(f"🔄 SyncScheduler initialized (test_mode={test_mode})")
@@ -440,6 +441,17 @@ class SyncScheduler:
             filename = f"sync_{sync_type}_{start_date[:10]}_{end_date[:10]}_dataset{dataset}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
             download_start = datetime.now()
 
+            # Use URL-based download if requested (more stable for large requests)
+            if self.config.get("use_urls", False):
+                logger.info("📋 Using URL-based download mode (delegating to sync_custom_period_urls)")
+                # Use the existing sync_custom_period_urls method which handles everything
+                return self.sync_custom_period_urls(
+                    start_date=start_date,
+                    end_date=end_date,
+                    sync_type=sync_type,
+                    max_workers=self.config.get("max_workers", 16),
+                )
+            
             zip_path = self.downloader.download(
                 countries=self.config["countries"],
                 pollutants=self.config["pollutants"],

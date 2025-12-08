@@ -288,6 +288,9 @@ class EEADownloader:
         request_body = self._build_request_body(
             countries, cities, pollutants, dataset, datetime_start, datetime_end
         )
+        
+        # DEBUG: Log the exact request body being sent
+        logger.info(f"📤 API Request Body: {request_body}")
 
         try:
             response = requests.post(f"{self.base_url}{Config.ENDPOINT_URLS}", json=request_body)
@@ -306,6 +309,7 @@ class EEADownloader:
 
         except requests.RequestException as e:
             logger.error(f"URL download failed: {e}")
+            logger.error(f"Request body was: {request_body}")
             raise DownloadError(f"Failed to download URLs: {e}") from e
 
     def get_summary(

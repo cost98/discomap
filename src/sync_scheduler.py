@@ -562,6 +562,7 @@ class SyncScheduler:
                 dataset=self.config["dataset"],
                 datetime_start=start_date,
                 datetime_end=end_date,
+                aggregation_type=self.config["aggregation"],
             )
 
             # Step 2: Parse CSV to get URLs

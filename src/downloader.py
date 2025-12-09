@@ -260,6 +260,7 @@ class EEADownloader:
         dataset: int = Config.DATASET_E2A,
         datetime_start: Optional[str] = None,
         datetime_end: Optional[str] = None,
+        aggregation_type: Optional[str] = None,
         filename: Optional[str] = None,
     ) -> Path:
         """
@@ -275,6 +276,7 @@ class EEADownloader:
             dataset: Dataset type
             datetime_start: Start datetime (ISO format)
             datetime_end: End datetime (ISO format)
+            aggregation_type: "hour", "day", or "var"
             filename: Output CSV filename
 
         Returns:
@@ -286,7 +288,7 @@ class EEADownloader:
         logger.info(f"Downloading URL list: countries={countries}, dataset={dataset}")
 
         request_body = self._build_request_body(
-            countries, cities, pollutants, dataset, datetime_start, datetime_end
+            countries, cities, pollutants, dataset, datetime_start, datetime_end, aggregation_type
         )
         
         # DEBUG: Log the exact request body being sent

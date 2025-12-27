@@ -5,7 +5,10 @@ Organizzati in moduli separati per migliore manutenibilità.
 """
 
 from .base import Base
-from .lookup import Country, Pollutant, ValidityFlag, VerificationStatus
+from .country import Country
+from .pollutant import Pollutant
+from .validity_flag import ValidityFlag
+from .verification_status import VerificationStatus
 from .measurement import Measurement
 from .station import SamplingPoint, Station
 

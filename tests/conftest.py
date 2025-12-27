@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import AsyncGenerator
 
 import pytest
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from testcontainers.postgres import PostgresContainer
@@ -18,15 +19,7 @@ from src.database.models import Base
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
 
-@pytest.fixture(scope="session")
-def event_loop():
-    """Create event loop for async tests."""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
-
-
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 async def test_engine():
     """Create test database engine."""
     engine = create_async_engine(TEST_DATABASE_URL, echo=False)
@@ -56,7 +49,7 @@ async def db_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
 
 
 # PostgreSQL container fixture for integration tests
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 def postgres_container():
     """
     Tira su container PostgreSQL+TimescaleDB per integration tests.
@@ -73,7 +66,7 @@ def postgres_container():
     postgres.stop()
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 async def postgres_engine(postgres_container):
     """Engine per PostgreSQL reale con TimescaleDB."""
     # Costruisci URL da container
@@ -86,22 +79,22 @@ async def postgres_engine(postgres_container):
     # Crea schema e tabelle
     async with engine.begin() as conn:
         # Crea schema airquality
-        await conn.execute("CREATE SCHEMA IF NOT EXISTS airquality")
+        await conn.execute(text("CREATE SCHEMA IF NOT EXISTS airquality"))
         
         # Crea estensione TimescaleDB
-        await conn.execute("CREATE EXTENSION IF NOT EXISTS timescaledb")
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS timescaledb"))
         
         # Crea tabelle dai modelli
         await conn.run_sync(Base.metadata.create_all)
         
         # Converti measurements in hypertable
-        await conn.execute("""
+        await conn.execute(text("""
             SELECT create_hypertable(
                 'airquality.measurements',
                 'time',
                 if_not_exists => TRUE
             )
-        """)
+        """))
     
     yield engine
     

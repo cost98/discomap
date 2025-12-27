@@ -34,7 +34,7 @@ class Station(Base):
     region: Mapped[Optional[str]] = mapped_column(String(100))
     start_date: Mapped[Optional[datetime]] = mapped_column(DateTime)
     end_date: Mapped[Optional[datetime]] = mapped_column(DateTime)
-    metadata: Mapped[Optional[dict]] = mapped_column(JSONB)
+    extra_metadata: Mapped[Optional[dict]] = mapped_column("metadata", JSONB)
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), server_default="NOW()")
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), server_default="NOW()")
 
@@ -57,6 +57,6 @@ class SamplingPoint(Base):
     pollutant_code: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("airquality.pollutants.pollutant_code"))
     start_date: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
     end_date: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
-    metadata: Mapped[Optional[dict]] = mapped_column(JSONB)
+    extra_metadata: Mapped[Optional[dict]] = mapped_column("metadata", JSONB)
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), server_default="NOW()")
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), server_default="NOW()")

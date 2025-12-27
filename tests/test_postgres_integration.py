@@ -13,6 +13,14 @@ from src.database.repositories import MeasurementRepository, StationRepository
 @pytest.mark.asyncio
 async def test_station_crud_postgres(postgres_session, sample_station_data):
     """Test CRUD su Station con PostgreSQL reale."""
+    from src.database.models import Country
+    
+    # Prima crea il country necessario
+    country = Country(country_code="IT", country_name="Italia", region="Europe")
+    postgres_session.add(country)
+    await postgres_session.commit()
+    
+    # Ora testa la station
     repo = StationRepository(postgres_session)
     
     # Create

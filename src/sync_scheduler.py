@@ -145,6 +145,7 @@ class SyncScheduler:
             "lookback_days": 7,  # Default lookback period
             "hourly_lookback_hours": 2,  # For hourly syncs
             "use_urls": False,  # Use URL-based download for large requests
+            "parquet_dir": Config.DATA_RAW,  # Directory for Parquet files
         }
 
         logger.info(f"🔄 SyncScheduler initialized (test_mode={test_mode})")
@@ -712,6 +713,118 @@ class SyncScheduler:
         except Exception as e:
             logger.error(f"❌ URL-based sync failed: {e}", exc_info=True)
             self.state.update_failure(str(e), sync_type=sync_type)
+            self.db_writer.fail_sync_operation(operation_id, str(e))
+            return False
+
+    def sync_from_urls(
+        self, parquet_urls: List[str], max_workers: int = 8
+    ) -> bool:
+        """
+        Sync directly from a list of Parquet URLs (bypass EEA API).
+        
+        Args:
+            parquet_urls: List of direct Parquet file URLs
+            max_workers: Number of parallel downloads
+            
+        Returns:
+            bool: Success status
+        """
+        logger.info("=" * 60)
+        logger.info("📋 Starting DIRECT URL SYNC")
+        logger.info(f"📋 Processing {len(parquet_urls)} Parquet files")
+        logger.info("=" * 60)
+
+        operation_id = self.db_writer.start_sync_operation(
+            operation_type="from_urls",
+            metadata={"file_count": len(parquet_urls), "max_workers": max_workers},
+        )
+
+        try:
+            parquet_dir = self.config["parquet_dir"]
+            parquet_dir.mkdir(parents=True, exist_ok=True)
+
+            downloaded_files = []
+            total_downloaded = 0
+            total_inserted = 0
+
+            # Download files
+            def download_file(url: str, index: int) -> Optional[Path]:
+                try:
+                    filename = f"direct_{index:04d}.parquet"
+                    filepath = parquet_dir / filename
+                    response = requests.get(url, timeout=120)
+                    response.raise_for_status()
+                    filepath.write_bytes(response.content)
+                    return filepath
+                except Exception as e:
+                    logger.warning(f"Failed to download {url}: {e}")
+                    return None
+
+            logger.info(f"⬇️  Downlooading {len(parquet_urls)} files with {max_workers} workers...")
+            download_start = datetime.now()
+
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                future_to_url = {
+                    executor.submit(download_file, url, i): (url, i)
+                    for i, url in enumerate(parquet_urls)
+                }
+
+                for future in as_completed(future_to_url):
+                    filepath = future.result()
+                    if filepath:
+                        downloaded_files.append(filepath)
+                        if len(downloaded_files) % 10 == 0:
+                            logger.info(f"   📥 Downloaded {len(downloaded_files)}/{len(parquet_urls)} files...")
+
+            download_duration = (datetime.now() - download_start).total_seconds()
+            logger.info(f"✅ Downloaded {len(downloaded_files)}/{len(parquet_urls)} files in {format_duration(download_duration)}")
+
+            # Process files
+            logger.info(f"📊 Processing {len(downloaded_files)} Parquet files...")
+            process_start = datetime.now()
+
+            for i, parquet_file in enumerate(downloaded_files):
+                try:
+                    df = read_parquet(parquet_file)
+                    if df is None or df.empty:
+                        continue
+
+                    total_downloaded += len(df)
+
+                    # Clean data
+                    df_clean = clean_dataframe(df)
+                    if df_clean.empty:
+                        continue
+
+                    # Insert measurements
+                    inserted = self.db_writer.insert_measurements(df_clean)
+                    total_inserted += inserted
+
+                    if (i + 1) % 10 == 0:
+                        logger.info(f"   📦 Processed {i+1}/{len(downloaded_files)} files ({total_inserted:,} records inserted)")
+
+                    parquet_file.unlink()
+
+                except Exception as e:
+                    logger.warning(f"Failed to process {parquet_file}: {e}")
+                    continue
+
+            process_duration = (datetime.now() - process_start).total_seconds()
+
+            self.state.update_success(total_inserted, sync_type="from_urls")
+            self.db_writer.complete_sync_operation(operation_id, total_downloaded, total_inserted)
+
+            logger.info("=" * 60)
+            logger.info(f"✅ DIRECT URL SYNC COMPLETED - {total_inserted:,} records inserted (from {total_downloaded:,} downloaded)")
+            logger.info(f"   ⏱️  Download: {format_duration(download_duration)}")
+            logger.info(f"   ⏱️  Processing: {format_duration(process_duration)}")
+            logger.info("=" * 60)
+
+            return True
+
+        except Exception as e:
+            logger.error(f"❌ Direct URL sync failed: {e}", exc_info=True)
+            self.state.update_failure(str(e), sync_type="from_urls")
             self.db_writer.fail_sync_operation(operation_id, str(e))
             return False
 

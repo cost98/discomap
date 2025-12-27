@@ -4,12 +4,12 @@ PostgreSQL + TimescaleDB platform for downloading, storing, and analyzing air qu
 
 ## ?? Features
 
-- ? **Automated Data Sync** - Hourly/incremental updates from EEA API
-- ? **Time-Series Database** - PostgreSQL + TimescaleDB with automatic compression
-- ? **Docker Deployment** - Production-ready containerized stack
-- ? **Data Validation** - Automatic quality checks and cleaning
-- ? **Monitoring Tools** - PgAdmin and Grafana (optional)
-- ? **CI/CD Pipeline** - Automated testing and security scanning
+- 🔄 **REST API** - FastAPI server for sync control and data operations
+- 📊 **Time-Series Database** - PostgreSQL + TimescaleDB with automatic compression
+- 🐳 **Docker Deployment** - Production-ready containerized stack
+- ✅ **Data Validation** - Automatic quality checks and cleaning
+- 📈 **Monitoring Tools** - PgAdmin and Grafana included
+- ⚡ **Direct URL Sync** - Bypass EEA API limitations with direct Parquet URLs
 
 ## ?? Quick Start
 
@@ -22,48 +22,43 @@ PostgreSQL + TimescaleDB platform for downloading, storing, and analyzing air qu
 ```bash
 # Clone repository
 git clone https://github.com/cost98/discomap.git
-cd discomap
+cd discomap/.docker
 
-# Configure environment
+# Configure environment (optional)
 cp .env.example .env
-# Edit .env with your PostgreSQL password
+# Edit .env with your passwords
 
 # Start all services
-docker-compose -f docker/docker-compose.yml up -d
+docker compose up -d
 
 # Check status
-docker-compose ps
+docker compose ps
+
+# Check API health
+curl http://localhost:8000/health
 ```
 
-### First Sync
 
-```bash
-# Test connection (dry-run)
-docker-compose -f docker/docker-compose.yml exec sync-scheduler python src/sync_scheduler.py --test
-
-# Run first sync (full)
-docker-compose -f docker/docker-compose.yml exec sync-scheduler python src/sync_scheduler.py --full
-
-# Check logs
-docker-compose logs -f sync-scheduler
-```
 
 ## ??? Database Schema
 
 ### Main Tables
 
-- **`measurements`** - Time-series data (hypertable, auto-compressed after 7 days)
-- **`sampling_points`** - Monitoring stations with PostGIS geolocation
+- **`stations`** - Physical monitoring stations (location, metadata)
+- **`sampling_points`** - Individual sensors/instruments at each station
+- **`measurements`** - Time-series data (TimescaleDB hypertable, compressed after 7 days)
 - **`pollutants`** - Pollutant codes and metadata (PM10, PM2.5, O3, NO2, etc.)
-- **`hourly_stats`** - Pre-computed hourly aggregates (continuous aggregate)
-- **`daily_stats`** - Pre-computed daily statistics (continuous aggregate)
+- **`countries`** - Country codes and names
+- **`validity_flags`** - Data validation status codes
+- **`verification_status`** - Data verification level codes
+- **`sync_operations`** - Sync operation tracking and history
 
 ### Key Features
 
-- **Automatic Compression** - 90% storage reduction for old data
-- **Continuous Aggregates** - Real-time materialized views
-- **PostGIS Support** - Geospatial queries on station locations
-- **Data Retention** - Optional automatic cleanup (configurable)
+- **Automatic Compression** - 90% storage reduction for old data (7-day policy)
+- **Normalized Structure** - Stations separated from sensors for better data integrity
+- **Data Validation** - Automatic quality checks on insert
+- **Sync Tracking** - Complete operation history with statistics
 
 ## ?? Monitoring
 
@@ -72,8 +67,9 @@ docker-compose logs -f sync-scheduler
 PgAdmin � opzionale e richiede configurazione manuale del server.
 
 ```bash
-# Avvia PgAdmin
-docker-compose -f docker/docker-compose.yml --profile tools up -d pgadmin
+# Start PgAdmin (optional)
+cd .docker
+docker compose --profile tools up -d pgadmin
 
 # Accedi: http://localhost:5050
 # Email: admin@example.com
@@ -113,7 +109,7 @@ Grafana si avvia automaticamente con tutti i servizi e include:
 
 ```bash
 # Connect to database
-docker-compose -f docker/docker-compose.yml exec postgres psql -U discomap -d discomap
+docker exec -it discomap-postgres psql -U discomap -d discomap
 
 # Run queries
 SELECT * FROM airquality.measurements ORDER BY time DESC LIMIT 10;
@@ -123,44 +119,62 @@ SELECT * FROM airquality.daily_stats WHERE date = CURRENT_DATE;
 
 ## ?? Sync Modes
 
-### Hourly (Automatic)
-Runs continuously in background, syncs last 24 hours every hour:
-```bash
-# Already running via sync-hourly service
-docker-compose -f docker/docker-compose.yml logs -f sync-hourly
+### From URLs (Recommended)
+Direct download from Parquet URLs, bypassing EEA API date limitations:
+
+```powershell
+# Get URLs for date range
+$result = Invoke-RestMethod -Uri "http://localhost:8000/sync/get-urls?countries=IT&pollutants=PM10&start_date=2023-01-01&end_date=2023-01-31&dataset=2" -Method POST
+
+# Start sync
+$body = @{
+    sync_type = "from_urls"
+    parquet_urls = $result.urls
+    max_workers = 8
+} | ConvertTo-Json -Depth 10
+
+Invoke-RestMethod -Uri "http://localhost:8000/sync/start" -Method POST -Headers @{"Content-Type"="application/json"} -Body $body
 ```
 
 ### Incremental (On-Demand)
-Sync only new data since last run:
+Sync recent data via API:
 ```bash
-docker-compose -f docker/docker-compose.yml exec sync-scheduler python src/sync_scheduler.py --incremental
+curl -X POST http://localhost:8000/sync/start \
+  -H "Content-Type: application/json" \
+  -d '{"sync_type":"incremental","countries":["IT"],"pollutants":["PM10"],"max_workers":8}'
 ```
 
-### Full (Manual)
-Complete resync of all data:
+### Custom Period
+Specify exact date range:
 ```bash
-docker-compose -f docker/docker-compose.yml exec sync-scheduler python src/sync_scheduler.py --full
+curl -X POST http://localhost:8000/sync/start \
+  -H "Content-Type: application/json" \
+  -d '{"sync_type":"custom_period","countries":["IT","FR"],"pollutants":["PM10","NO2"],"start_date":"2023-01-01","end_date":"2023-12-31","max_workers":8}'
 ```
 
 ## ??? Management Commands
 
-### Using docker-compose
+### Docker Compose Commands
 
 ```bash
+# Navigate to docker directory
+cd .docker
+
 # Start all services
-docker-compose -f docker/docker-compose.yml up -d
+docker compose up -d
 
 # Stop all services
-docker-compose -f docker/docker-compose.yml down
+docker compose down
 
 # View logs
-docker-compose -f docker/docker-compose.yml logs -f [service-name]
+docker compose logs -f api
+docker compose logs -f postgres
 
 # Restart service
-docker-compose -f docker/docker-compose.yml restart [service-name]
+docker compose restart api
 
-# Execute command in container
-docker-compose -f docker/docker-compose.yml exec sync-scheduler bash
+# Rebuild and restart
+docker compose up -d --build api
 ```
 
 ### Using Management Scripts
@@ -219,24 +233,38 @@ discomap/
 +-- README.md
 ```
 
-## ?? Testing
+## 🔧 Configuration
 
-```bash
-# Run all tests
-docker-compose -f docker/docker-compose.yml exec sync-scheduler pytest
+### Environment Variables
 
-# Run with coverage
-docker-compose -f docker/docker-compose.yml exec sync-scheduler pytest --cov=src tests/
+Create `.env` file in `.docker/` directory (optional, defaults provided):
 
-# Run specific test file
-docker-compose -f docker/docker-compose.yml exec sync-scheduler pytest tests/test_validators.py
+```env
+# Database
+POSTGRES_PASSWORD=your_secure_password_here
+POSTGRES_PORT=5432
+
+# API
+API_PORT=8000
+
+# Grafana
+GRAFANA_USER=admin
+GRAFANA_PASSWORD=admin
+GRAFANA_PORT=3000
+
+# PgAdmin (optional)
+PGADMIN_EMAIL=admin@discomap.com
+PGADMIN_PASSWORD=admin
+PGADMIN_PORT=5050
 ```
 
-## ?? Documentation
+### API Configuration
 
-- **[Docker Guide](docs/DOCKER_GUIDE.md)** - Complete Docker setup and deployment
-- **[Sync Guide](docs/SYNC_GUIDE.md)** - Automation and scheduling
-- **[EEA Data Policy](EEA_data_policy.md)** - Data usage terms
+Edit `src/config.py` for:
+- Default countries and pollutants
+- Data directories (if not using Docker volumes)
+- Logging configuration
+- Database connection settings
 
 ## ?? Security
 
@@ -284,10 +312,18 @@ See [DOCKER_GUIDE.md](docs/DOCKER_GUIDE.md) for detailed production deployment i
 ## ?? Data Sources
 
 All data from **European Environment Agency (EEA)**:
-- API: https://eeadmz1-downloads-api-appservice.azurewebsites.net
-- Pollutants: PM10, PM2.5, O3, NO2, SO2, CO, Benzene, Heavy Metals
-- Coverage: 30+ European countries
-- Format: Parquet files with hourly measurements
+- **API Endpoint**: https://eeadmz1-downloads-api-appservice.azurewebsites.net
+- **Direct Parquet URLs**: Bypass API date limitations
+- **Pollutants**: PM10, PM2.5, O3, NO2, SO2, CO, Benzene, Heavy Metals, VOCs
+- **Coverage**: 30+ European countries
+- **Format**: Parquet files with hourly measurements
+- **Temporal Resolution**: Hourly data from 1990 to present
+
+### Known API Limitations
+
+The EEA Parquet API endpoint has a known issue where `dateTimeStart` and `dateTimeEnd` parameters are **ignored**, always returning 2024-2025 data regardless of requested dates.
+
+**Workaround**: Use the `/sync/get-urls` endpoint to retrieve direct Parquet file URLs, then sync with `from_urls` mode. This bypasses the API and downloads the correct historical data.
 
 ## ?? Contributing
 

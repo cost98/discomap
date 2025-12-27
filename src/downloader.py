@@ -314,6 +314,61 @@ class EEADownloader:
             logger.error(f"Request body was: {request_body}")
             raise DownloadError(f"Failed to download URLs: {e}") from e
 
+    def get_parquet_urls(
+        self,
+        countries: Optional[List[str]] = None,
+        cities: Optional[List[str]] = None,
+        pollutants: Optional[List[str]] = None,
+        dataset: int = Config.DATASET_E2A,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        aggregation_type: Optional[str] = None,
+    ) -> List[str]:
+        """
+        Get list of Parquet URLs from EEA API without downloading files.
+        
+        Args:
+            countries: List of country codes
+            cities: List of city names
+            pollutants: List of pollutant codes
+            dataset: Dataset type
+            start_date: Start date (YYYY-MM-DD or ISO format)
+            end_date: End date (YYYY-MM-DD or ISO format)
+            aggregation_type: "hour", "day", or "var"
+            
+        Returns:
+            List of Parquet file URLs
+        """
+        # Convert date formats if needed
+        if start_date and len(start_date) == 10:
+            start_date = f"{start_date}T00:00:00Z"
+        if end_date and len(end_date) == 10:
+            end_date = f"{end_date}T23:59:59Z"
+            
+        # Download CSV with URLs
+        csv_path = self.download_urls(
+            countries=countries,
+            cities=cities,
+            pollutants=pollutants,
+            dataset=dataset,
+            datetime_start=start_date,
+            datetime_end=end_date,
+            aggregation_type=aggregation_type
+        )
+        
+        # Parse URLs from CSV
+        urls = []
+        with open(csv_path, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line and line.startswith('http'):
+                    urls.append(line)
+        
+        # Cleanup CSV
+        csv_path.unlink()
+        
+        return urls
+
     def get_summary(
         self,
         countries: Optional[List[str]] = None,

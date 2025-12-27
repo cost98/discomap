@@ -65,7 +65,7 @@ app.add_middleware(
 class SyncRequest(BaseModel):
     """Request model for starting a sync."""
 
-    sync_type: str = Field(..., description="Type: 'incremental', 'hourly', 'custom'")
+    sync_type: str = Field(..., description="Type: 'incremental', 'hourly', 'custom', 'from_urls'")
     countries: Optional[List[str]] = Field(
         default=["IT"], description="Country codes"
     )
@@ -78,6 +78,7 @@ class SyncRequest(BaseModel):
     dataset: Optional[int] = Field(None, description="Force dataset: 1=E2a (2025+), 2=E1a (2013-2024), 3=Airbase (2002-2012). Auto-detects if not specified.")
     aggregation_type: Optional[str] = Field("hour", description="Data aggregation: 'hour' (hourly), 'day' (daily), 'var' (variable)")
     use_urls: bool = Field(False, description="Use URL-based download (more stable for large requests)")
+    parquet_urls: Optional[List[str]] = Field(None, description="Direct list of Parquet URLs (for from_urls sync_type)")
     max_workers: int = Field(8, description="Parallel download workers")
 
 
@@ -134,6 +135,7 @@ def run_sync_task(
     dataset: Optional[int] = None,
     aggregation_type: str = "hour",
     use_urls: bool = False,
+    parquet_urls: Optional[List[str]] = None,
     max_workers: int = 8,
 ):
     """Run sync in background."""
@@ -199,6 +201,11 @@ def run_sync_task(
 
             # Use sync_custom_period (auto-detects or uses forced dataset)
             success = scheduler.sync_custom_period(start_date, end_date)
+        elif sync_type == "from_urls":
+            # Direct URL sync - bypass API
+            if not parquet_urls:
+                raise ValueError("from_urls sync requires parquet_urls list")
+            success = scheduler.sync_from_urls(parquet_urls, max_workers=max_workers)
         else:
             raise ValueError(f"Unknown sync type: {sync_type}")
 
@@ -245,6 +252,35 @@ async def health():
 
 
 # === Sync Operations ===
+
+
+@app.post("/sync/get-urls")
+async def get_parquet_urls(
+    countries: str = Query("IT", description="Comma-separated country codes"),
+    pollutants: str = Query("PM10", description="Comma-separated pollutant codes"),
+    start_date: str = Query(..., description="Start date YYYY-MM-DD"),
+    end_date: str = Query(..., description="End date YYYY-MM-DD"),
+    dataset: int = Query(2, description="Dataset: 1=E2a, 2=E1a, 3=Airbase"),
+):
+    """Get list of Parquet URLs from EEA API without downloading."""
+    try:
+        from src.downloader import EEADownloader
+        downloader = EEADownloader()
+        
+        country_list = [c.strip() for c in countries.split(",")]
+        pollutant_list = [p.strip() for p in pollutants.split(",")]
+        
+        urls = downloader.get_parquet_urls(
+            countries=country_list,
+            pollutants=pollutant_list,
+            start_date=start_date,
+            end_date=end_date,
+            dataset=dataset
+        )
+        
+        return {"urls": urls, "count": len(urls)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/sync/start", response_model=SyncResponse)
@@ -301,6 +337,7 @@ async def start_sync(request: SyncRequest, background_tasks: BackgroundTasks):
         dataset=request.dataset,
         aggregation_type=request.aggregation_type,
         use_urls=request.use_urls,
+        parquet_urls=request.parquet_urls,
         max_workers=request.max_workers,
     )
 

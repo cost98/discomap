@@ -4,12 +4,15 @@
 
 FROM timescale/timescaledb:latest-pg16
 
-# Install Python and Alembic for migrations
-RUN apt-get update && apt-get install -y \
+# Install Python and Alembic for migrations (Alpine Linux)
+RUN apk add --no-cache \
     python3 \
-    python3-pip \
-    python3-venv \
-    && rm -rf /var/lib/apt/lists/*
+    py3-pip \
+    bash \
+    && pip3 install --break-system-packages \
+    alembic==1.14.0 \
+    sqlalchemy==2.0.45 \
+    psycopg2-binary==2.9.10
 
 # Set environment variables
 ENV POSTGRES_DB=discomap \
@@ -25,19 +28,17 @@ ENV POSTGRES_DB=discomap \
 # Create app directory for migrations
 WORKDIR /app
 
-# Copy Python dependencies and Alembic configuration
-COPY pyproject.toml /app/
-COPY .docker/alembic.ini /app/
-COPY .docker/alembic /app/alembic/
-COPY src/database/models /app/src/database/models/
-COPY src/database/__init__.py /app/src/database/
-COPY src/__init__.py /app/src/
+# Copy Alembic configuration and migrations from project root
+COPY alembic.ini /app/
+COPY alembic /app/alembic/
 
-# Install Python dependencies (minimal for migrations)
-RUN pip3 install --no-cache-dir \
-    alembic==1.14.0 \
-    sqlalchemy==2.0.45 \
-    psycopg2-binary==2.9.10
+# Copy minimal src structure for models only
+RUN mkdir -p /app/src/database/models
+COPY src/database/models/*.py /app/src/database/models/
+
+# Create minimal __init__.py files (avoid importing engine)
+RUN echo "# Minimal init for Alembic" > /app/src/__init__.py && \
+    echo "# Minimal init for Alembic" > /app/src/database/__init__.py
 
 # Copy migration entrypoint script
 COPY .docker/postgres/docker-entrypoint-migrations.sh /docker-entrypoint-initdb.d/99-run-migrations.sh

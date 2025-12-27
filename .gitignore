@@ -76,3 +76,8 @@ coverage.xml
 
 # mypy
 .mypy_cache/
+
+# Alembic
+# Keep migrations in version control, but ignore bytecode
+alembic/__pycache__/
+alembic/versions/__pycache__/

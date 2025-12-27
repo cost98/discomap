@@ -25,13 +25,21 @@ target_metadata = Base.metadata
 
 
 def get_url():
-    """Build database URL from environment variables."""
+    """Build database URL from environment variables.
+    
+    During container initialization, use Unix socket if host is localhost.
+    """
     user = os.getenv("DB_USER", "discomap")
     password = os.getenv("DB_PASSWORD", "changeme")
     host = os.getenv("DB_HOST", "postgres")
     port = os.getenv("DB_PORT", "5432")
     database = os.getenv("DB_NAME", "discomap")
-    return f"postgresql://{user}:{password}@{host}:{port}/{database}"
+    
+    # Use Unix socket for localhost during init
+    if host == "localhost":
+        return f"postgresql://{user}:{password}@/{database}?host=/var/run/postgresql"
+    else:
+        return f"postgresql://{user}:{password}@{host}:{port}/{database}"
 
 
 def run_migrations_offline() -> None:
@@ -75,7 +83,7 @@ def run_migrations_online() -> None:
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
-            version_table_schema="airquality",
+            version_table_schema="public",  # Use public since migration creates airquality schema
         )
 
         with context.begin_transaction():

@@ -70,32 +70,31 @@ Migrations run automatically when the PostgreSQL container starts:
 
 **Create a new migration** (after changing models):
 ```bash
-cd .docker
-export DB_HOST=localhost
-export DB_PASSWORD=your_password
+# From project root
 alembic revision --autogenerate -m "Description of changes"
 ```
 
 **Apply migrations**:
 ```bash
-cd .docker
+# From project root
 alembic upgrade head
 ```
 
 **Rollback last migration**:
 ```bash
-cd .docker
+# From project root
 alembic downgrade -1
 ```
 
 **View migration history**:
 ```bash
-cd .docker
+# From project root
 alembic history
 ```
 
 ### Migration Files
-- **Location**: `.docker/alembic/versions/`
+- **Location**: `alembic/versions/` (project root)
+- **Configuration**: `alembic.ini` (project root)
 - **Initial migration**: `001_initial.py` (creates all tables from SQLAlchemy models)
 - **Format**: `YYYYMMDD_HHMM_<revision>_<slug>.py`
 
@@ -103,12 +102,6 @@ alembic history
 
 ```
 .docker/
-├── alembic/                      # Alembic migrations
-│   ├── versions/                 # Migration scripts
-│   │   └── 001_initial.py       # Initial schema
-│   ├── env.py                    # Alembic environment
-│   └── script.py.mako            # Migration template
-├── alembic.ini                   # Alembic configuration
 ├── postgres/                     # PostgreSQL configuration
 │   ├── docker-entrypoint-migrations.sh  # Migration runner
 │   ├── postgresql.conf           # PostgreSQL tuning (if needed)
@@ -118,6 +111,19 @@ alembic history
 ├── grafana/                      # Grafana configuration
 │   ├── datasources/              # Data sources
 │   └── dashboards/               # Dashboards
+├── Dockerfile.postgres           # PostgreSQL + TimescaleDB + Alembic
+├── Dockerfile.api                # API server
+├── docker-compose.yml            # Service orchestration
+├── .env.example                  # Environment variables template
+└── README.md                     # This file
+
+../alembic/                       # Database migrations (project root)
+├── versions/                     # Migration scripts
+│   └── 001_initial.py           # Initial schema
+├── env.py                        # Alembic environment
+└── script.py.mako                # Migration template
+../alembic.ini                    # Alembic configuration (project root)
+```
 ├── docker-compose.yml            # Main compose file
 ├── docker-compose.prod.yml       # Production overrides
 ├── Dockerfile.postgres           # PostgreSQL + TimescaleDB image

@@ -8,11 +8,8 @@ echo "======================================"
 echo "Running Alembic migrations..."
 echo "======================================"
 
-# Wait for PostgreSQL to be ready
-until pg_isready -h localhost -U "$POSTGRES_USER" -d "$POSTGRES_DB"; do
-    echo "Waiting for PostgreSQL to be ready..."
-    sleep 2
-done
+# Database is already running during init scripts
+# No need to wait - just run migrations
 
 # Set database connection for Alembic
 export DB_HOST=localhost

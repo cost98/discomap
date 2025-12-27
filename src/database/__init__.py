@@ -1,10 +1,15 @@
 """
-Database package for DiscoMap.
+Package database - SQLAlchemy ORM per DiscoMap.
 
-Provides SQLAlchemy models, engine configuration, and database utilities.
+Uso semplice:
+    from src.database import get_db_session, StationRepository
+    
+    async with get_db_session() as session:
+        station_repo = StationRepository(session)
+        station = await station_repo.get_by_code("IT0508A")
 """
 
-from .engine import get_engine, get_session, get_db_session, init_db, close_db
+from .engine import close_db, get_db_session, get_engine, get_session_factory
 from .models import (
     Base,
     Country,
@@ -15,13 +20,7 @@ from .models import (
     ValidityFlag,
     VerificationStatus,
 )
-from .repositories import (
-    CountryRepository,
-    MeasurementRepository,
-    PollutantRepository,
-    SamplingPointRepository,
-    StationRepository,
-)
+from .repositories import MeasurementRepository, SamplingPointRepository, StationRepository
 
 __all__ = [
     # Models
@@ -35,14 +34,11 @@ __all__ = [
     "VerificationStatus",
     # Engine
     "get_engine",
-    "get_session",
+    "get_session_factory",
     "get_db_session",
-    "init_db",
     "close_db",
     # Repositories
-    "CountryRepository",
     "StationRepository",
     "SamplingPointRepository",
-    "PollutantRepository",
     "MeasurementRepository",
 ]

@@ -1,141 +1,78 @@
 """
-Repository pattern for database operations.
+Repository pattern per operazioni database.
 
-Provides async CRUD operations for DiscoMap entities using SQLAlchemy.
+Interfacce semplificate per CRUD operations.
 """
 
 from datetime import datetime
 from typing import List, Optional, Sequence
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
-from src.database.models import (
-    Country,
-    Measurement,
-    Pollutant,
-    SamplingPoint,
-    Station,
-    ValidityFlag,
-    VerificationStatus,
-)
+from src.database.models import Country, Measurement, Pollutant, SamplingPoint, Station
 
 
-class BaseRepository:
-    """Base repository with common CRUD operations."""
+class StationRepository:
+    """Repository per operazioni su Station."""
 
     def __init__(self, session: AsyncSession):
         self.session = session
 
-
-class StationRepository(BaseRepository):
-    """Repository for Station entities."""
-
     async def get_by_code(self, station_code: str) -> Optional[Station]:
-        """Get station by code."""
+        """Ottieni stazione per codice."""
         result = await self.session.execute(
-            select(Station)
-            .where(Station.station_code == station_code)
-            .options(selectinload(Station.sampling_points))
+            select(Station).where(Station.station_code == station_code)
         )
         return result.scalar_one_or_none()
 
-    async def get_all(
-        self, country_code: Optional[str] = None, limit: int = 1000
-    ) -> Sequence[Station]:
-        """Get all stations, optionally filtered by country."""
-        query = select(Station)
-        if country_code:
-            query = query.where(Station.country_code == country_code)
-        query = query.limit(limit)
-
-        result = await self.session.execute(query)
-        return result.scalars().all()
-
-    async def create_or_update(self, station_data: dict) -> Station:
-        """Create new station or update existing."""
-        existing = await self.get_by_code(station_data["station_code"])
-
-        if existing:
-            # Update existing
-            await self.session.execute(
-                update(Station)
-                .where(Station.station_code == station_data["station_code"])
-                .values(**station_data, updated_at=datetime.utcnow())
-            )
-            await self.session.commit()
-            return await self.get_by_code(station_data["station_code"])
+    async def create_or_update(self, data: dict) -> Station:
+        """Crea o aggiorna stazione."""
+        station = await self.get_by_code(data["station_code"])
+        
+        if station:
+            # Aggiorna esistente
+            for key, value in data.items():
+                setattr(station, key, value)
+            station.updated_at = datetime.utcnow()
         else:
-            # Create new
-            station = Station(**station_data)
+            # Crea nuova
+            station = Station(**data)
             self.session.add(station)
-            await self.session.commit()
-            await self.session.refresh(station)
-            return station
-
-    async def bulk_create_or_update(self, stations_data: List[dict]) -> int:
-        """Bulk create or update stations."""
-        count = 0
-        for station_data in stations_data:
-            await self.create_or_update(station_data)
-            count += 1
-        return count
+        
+        await self.session.flush()
+        return station
 
 
-class SamplingPointRepository(BaseRepository):
-    """Repository for SamplingPoint entities."""
+class SamplingPointRepository:
+    """Repository per operazioni su SamplingPoint."""
+
+    def __init__(self, session: AsyncSession):
+        self.session = session
 
     async def get_by_id(self, sampling_point_id: str) -> Optional[SamplingPoint]:
-        """Get sampling point by ID."""
+        """Ottieni sampling point per ID."""
         result = await self.session.execute(
-            select(SamplingPoint)
-            .where(SamplingPoint.sampling_point_id == sampling_point_id)
-            .options(
-                selectinload(SamplingPoint.station),
-                selectinload(SamplingPoint.pollutant),
-            )
+            select(SamplingPoint).where(SamplingPoint.sampling_point_id == sampling_point_id)
         )
         return result.scalar_one_or_none()
 
-    async def get_by_station(self, station_code: str) -> Sequence[SamplingPoint]:
-        """Get all sampling points for a station."""
-        result = await self.session.execute(
-            select(SamplingPoint).where(SamplingPoint.station_code == station_code)
-        )
-        return result.scalars().all()
-
-    async def create_or_update(self, sampling_point_data: dict) -> SamplingPoint:
-        """Create new sampling point or update existing."""
-        existing = await self.get_by_id(sampling_point_data["sampling_point_id"])
-
-        if existing:
-            # Update existing
-            await self.session.execute(
-                update(SamplingPoint)
-                .where(
-                    SamplingPoint.sampling_point_id
-                    == sampling_point_data["sampling_point_id"]
-                )
-                .values(**sampling_point_data, updated_at=datetime.utcnow())
-            )
-            await self.session.commit()
-            return await self.get_by_id(sampling_point_data["sampling_point_id"])
+    async def create_or_update(self, data: dict) -> SamplingPoint:
+        """Crea o aggiorna sampling point."""
+        sp = await self.get_by_id(data["sampling_point_id"])
+        
+        if sp:
+            # Aggiorna esistente
+            for key, value in data.items():
+                setattr(sp, key, value)
+            sp.updated_at = datetime.utcnow()
         else:
-            # Create new
-            sp = SamplingPoint(**sampling_point_data)
+            # Crea nuovo
+            sp = SamplingPoint(**data)
             self.session.add(sp)
-            await self.session.commit()
-            await self.session.refresh(sp)
-            return sp
-
-    async def bulk_create_or_update(self, sampling_points_data: List[dict]) -> int:
-        """Bulk create or update sampling points."""
-        count = 0
-        for sp_data in sampling_points_data:
-            await self.create_or_update(sp_data)
-            count += 1
-        return count
+        
+        await self.session.flush()
+        return sp
 
 
 class MeasurementRepository(BaseRepository):
@@ -162,24 +99,41 @@ class MeasurementRepository(BaseRepository):
             .where(Measurement.sampling_point_id == sampling_point_id)
             .order_by(Measurement.time.desc())
             .limit(limit)
-        )
-        return result.scalars().all()
+        ):
+    """Repository per operazioni su Measurement (time-series)."""
 
-    async def get_time_range(
-        self,
-        sampling_point_id: str,
-        start_time: datetime,
-        end_time: datetime,
-    ) -> Sequence[Measurement]:
-        """Get measurements within time range."""
+    def __init__(self, session: AsyncSession):
+        self.session = session
+
+    async def bulk_insert(self, measurements: List[dict]) -> int:
+        """
+        Inserimento bulk di misurazioni (ottimizzato per TimescaleDB).
+        
+        Uso:
+            measurements = [
+                {"time": datetime(...), "sampling_point_id": "...", "value": 25.5, ...},
+                ...
+            ]
+            count = await repo.bulk_insert(measurements)
+        """
+        if not measurements:
+            return 0
+        
+        # Usa bulk insert di SQLAlchemy
+        await self.session.execute(
+            Measurement.__table__.insert(),
+            measurements
+        )
+        await self.session.flush()
+        return len(measurements)
+
+    async def get_latest(self, sampling_point_id: str, limit: int = 100) -> Sequence[Measurement]:
+        """Ottieni ultime N misurazioni per sampling point."""
         result = await self.session.execute(
             select(Measurement)
-            .where(
-                Measurement.sampling_point_id == sampling_point_id,
-                Measurement.time >= start_time,
-                Measurement.time <= end_time,
-            )
+            .where(Measurement.sampling_point_id == sampling_point_id)
             .order_by(Measurement.time.desc())
+            .limit(limit)
         )
         return result.scalars().all()
 
@@ -189,7 +143,7 @@ class MeasurementRepository(BaseRepository):
         start_time: datetime,
         end_time: datetime,
     ) -> int:
-        """Delete measurements within time range (for re-sync)."""
+        """Elimina misurazioni in un range temporale (per re-sync)."""
         result = await self.session.execute(
             delete(Measurement).where(
                 Measurement.sampling_point_id == sampling_point_id,
@@ -197,37 +151,5 @@ class MeasurementRepository(BaseRepository):
                 Measurement.time <= end_time,
             )
         )
-        await self.session.commit()
+        await self.session.flush()
         return result.rowcount
-
-
-class PollutantRepository(BaseRepository):
-    """Repository for Pollutant entities."""
-
-    async def get_by_code(self, pollutant_code: int) -> Optional[Pollutant]:
-        """Get pollutant by code."""
-        result = await self.session.execute(
-            select(Pollutant).where(Pollutant.pollutant_code == pollutant_code)
-        )
-        return result.scalar_one_or_none()
-
-    async def get_all(self) -> Sequence[Pollutant]:
-        """Get all pollutants."""
-        result = await self.session.execute(select(Pollutant))
-        return result.scalars().all()
-
-
-class CountryRepository(BaseRepository):
-    """Repository for Country entities."""
-
-    async def get_by_code(self, country_code: str) -> Optional[Country]:
-        """Get country by code."""
-        result = await self.session.execute(
-            select(Country).where(Country.country_code == country_code)
-        )
-        return result.scalar_one_or_none()
-
-    async def get_all(self) -> Sequence[Country]:
-        """Get all countries."""
-        result = await self.session.execute(select(Country))
-        return result.scalars().all()

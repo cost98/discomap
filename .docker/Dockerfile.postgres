@@ -1,0 +1,53 @@
+# Dockerfile for PostgreSQL with TimescaleDB extension
+# Optimized for air quality time-series data
+# Uses Alembic for schema migrations
+
+FROM timescale/timescaledb:latest-pg16
+
+# Install Python and Alembic for migrations
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    python3-venv \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set environment variables
+ENV POSTGRES_DB=discomap \
+    POSTGRES_USER=discomap \
+    POSTGRES_PASSWORD=changeme \
+    TIMESCALEDB_TELEMETRY=off \
+    DB_HOST=localhost \
+    DB_PORT=5432 \
+    DB_NAME=discomap \
+    DB_USER=discomap \
+    DB_PASSWORD=changeme
+
+# Create app directory for migrations
+WORKDIR /app
+
+# Copy Python dependencies and Alembic configuration
+COPY pyproject.toml /app/
+COPY .docker/alembic.ini /app/
+COPY .docker/alembic /app/alembic/
+COPY src/database/models /app/src/database/models/
+COPY src/database/__init__.py /app/src/database/
+COPY src/__init__.py /app/src/
+
+# Install Python dependencies (minimal for migrations)
+RUN pip3 install --no-cache-dir \
+    alembic==1.14.0 \
+    sqlalchemy==2.0.45 \
+    psycopg2-binary==2.9.10
+
+# Copy migration entrypoint script
+COPY .docker/postgres/docker-entrypoint-migrations.sh /docker-entrypoint-initdb.d/99-run-migrations.sh
+RUN chmod +x /docker-entrypoint-initdb.d/99-run-migrations.sh
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD pg_isready -U $POSTGRES_USER -d $POSTGRES_DB
+
+# Labels
+LABEL maintainer="cosimo <cost98@github>" \
+      description="DiscoMap PostgreSQL + TimescaleDB with Alembic migrations" \
+      version="2.0.0"

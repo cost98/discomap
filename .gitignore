@@ -58,9 +58,12 @@ data/processed/*.parquet
 *.log
 logs/
 
-# Docker volumes (created by docker-compose)
-data/
-.docker/
+# Docker
+# Ignore runtime data and volumes, but keep configuration
+.docker/.env
+.docker/postgres/backups/
+.docker/grafana/data/
+.docker/pgadmin/data/
 
 # Coverage
 htmlcov/

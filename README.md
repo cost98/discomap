@@ -9,8 +9,8 @@ PostgreSQL + TimescaleDB platform for downloading, storing, and analyzing air qu
 - 🐳 **Docker Deployment** - Production-ready containerized stack
 - ✅ **Data Validation** - Automatic quality checks and cleaning
 - 📈 **Monitoring Tools** - PgAdmin and Grafana included
-- ⚡ **Direct URL Sync** - Bypass EEA API limitations with direct Parquet URLs
-
+- ⚡ **Direct URL Sync** - Bypass EEA API limitations with direct Parquet URLs- 🗄️ **SQLAlchemy ORM** - Type-safe async database operations with repository pattern
+- 🔄 **Alembic Migrations** - Version-controlled database schema management
 ## ?? Quick Start
 
 ### Prerequisites
@@ -233,6 +233,54 @@ discomap/
 +-- README.md
 ```
 
+## 🏗️ Architecture
+
+### Database Layer
+
+**SQLAlchemy 2.0 + AsyncPG** for modern async operations:
+
+```python
+from src.database import get_db_session, StationRepository
+
+async with get_db_session() as session:
+    station_repo = StationRepository(session)
+    station = await station_repo.get_by_code("IT0508A")
+```
+
+**Key Benefits:**
+- ⚡ **3x faster** than psycopg2 (AsyncPG driver)
+- 🔒 **Type-safe** with SQLAlchemy 2.0 `Mapped[T]` syntax
+- 🔄 **Versioned migrations** with Alembic
+- 🧩 **Repository pattern** for clean separation of concerns
+- 📦 **Connection pooling** managed automatically
+
+### Database Migrations
+
+Use Alembic for schema changes:
+
+```bash
+# Generate migration from model changes
+python -m alembic revision --autogenerate -m "description"
+
+# Apply migrations
+python -m alembic upgrade head
+
+# Rollback one migration
+python -m alembic downgrade -1
+
+# View migration history
+python -m alembic history
+```
+
+### Repository Pattern
+
+Available repositories in `src.database.repositories`:
+- `StationRepository` - Station CRUD operations
+- `SamplingPointRepository` - Sampling point management
+- `MeasurementRepository` - Time-series data (bulk inserts optimized)
+- `PollutantRepository` - Pollutant lookups
+- `CountryRepository` - Country lookups
+
 ## 🔧 Configuration
 
 ### Environment Variables
@@ -328,11 +376,23 @@ The EEA Parquet API endpoint has a known issue where `dateTimeStart` and `dateTi
 ## ?? Contributing
 
 ```bash
-# Create feature branch
-git checkout -b feature/new-feature
+# Clone and setup
+git clone https://github.com/cost98/discomap.git
+cd discomap
+
+# Install dependencies
+pip install -r .docker/requirements.txt
 
 # Run tests
 pytest
+
+# Format code
+black src/
+isort src/
+ruff check src/
+
+# Create feature branch
+git checkout -b feature/new-feature
 
 # Commit changes
 git commit -m "feat: add new feature"
@@ -340,6 +400,17 @@ git commit -m "feat: add new feature"
 # Push and create PR
 git push origin feature/new-feature
 ```
+
+### Development Stack
+
+- **Python**: 3.11+
+- **Database**: PostgreSQL 16 + TimescaleDB 2.14
+- **ORM**: SQLAlchemy 2.0 (async)
+- **Migrations**: Alembic 1.13+
+- **API**: FastAPI 0.115+
+- **Driver**: AsyncPG 0.29+
+- **Testing**: pytest + pytest-asyncio
+- **Formatting**: black, isort, ruff
 
 ## ?? License
 
@@ -356,12 +427,16 @@ This project uses data from the European Environment Agency (EEA). Please refer 
 - [x] Docker containerization
 - [x] Automated sync scheduler
 - [x] PgAdmin and Grafana monitoring
-- [ ] REST API (FastAPI)
+- [x] REST API (FastAPI)
+- [x] SQLAlchemy 2.0 ORM with async support
+- [x] Alembic database migrations
+- [x] Repository pattern architecture
+- [ ] Complete db_writer.py refactoring to SQLAlchemy
+- [ ] Async sync_scheduler.py
 - [ ] Streamlit dashboard
 - [ ] Prometheus metrics export
 - [ ] Email/Slack alerts
 - [ ] Data retention automation
-- [ ] GraphQL API
 
 ---
 

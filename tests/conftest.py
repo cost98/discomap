@@ -118,6 +118,46 @@ async def postgres_session(postgres_engine) -> AsyncGenerator[AsyncSession, None
 
 
 @pytest.fixture
+async def postgres_session_with_data(postgres_session) -> AsyncGenerator[AsyncSession, None]:
+    """Sessione PostgreSQL con dati di lookup precaricati."""
+    from src.database.models import Country, Pollutant, ValidityFlag, VerificationStatus
+    
+    # Crea countries
+    countries = [
+        Country(country_code="IT", country_name="Italia", region="Europe"),
+        Country(country_code="FR", country_name="Francia", region="Europe"),
+    ]
+    postgres_session.add_all(countries)
+    
+    # Crea pollutants
+    pollutants = [
+        Pollutant(pollutant_code=5, pollutant_name="PM10", pollutant_label="Particulate Matter < 10 µm", unit="µg/m³"),
+        Pollutant(pollutant_code=8, pollutant_name="NO2", pollutant_label="Nitrogen Dioxide", unit="µg/m³"),
+        Pollutant(pollutant_code=1, pollutant_name="SO2", pollutant_label="Sulphur Dioxide", unit="µg/m³"),
+    ]
+    postgres_session.add_all(pollutants)
+    
+    # Crea validity flags
+    validity_flags = [
+        ValidityFlag(validity_code=1, validity_name="Valid", description="Valid data"),
+        ValidityFlag(validity_code=2, validity_name="Invalid", description="Invalid data"),
+        ValidityFlag(validity_code=3, validity_name="Unverified", description="Not yet verified"),
+    ]
+    postgres_session.add_all(validity_flags)
+    
+    # Crea verification status
+    verification_statuses = [
+        VerificationStatus(verification_code=1, verification_name="Verified", description="Data verified"),
+        VerificationStatus(verification_code=2, verification_name="Preliminary", description="Preliminary data"),
+    ]
+    postgres_session.add_all(verification_statuses)
+    
+    await postgres_session.commit()
+    
+    yield postgres_session
+
+
+@pytest.fixture
 def sample_station_data():
     """Sample station data for testing."""
     return {

@@ -11,17 +11,9 @@ from src.database.repositories import MeasurementRepository, StationRepository
 
 
 @pytest.mark.asyncio
-async def test_station_crud_postgres(postgres_session, sample_station_data):
+async def test_station_crud_postgres(postgres_session_with_data, sample_station_data):
     """Test CRUD su Station con PostgreSQL reale."""
-    from src.database.models import Country
-    
-    # Prima crea il country necessario
-    country = Country(country_code="IT", country_name="Italia", region="Europe")
-    postgres_session.add(country)
-    await postgres_session.commit()
-    
-    # Ora testa la station
-    repo = StationRepository(postgres_session)
+    repo = StationRepository(postgres_session_with_data)
     
     # Create
     station = await repo.create_or_update(sample_station_data)
@@ -40,9 +32,23 @@ async def test_station_crud_postgres(postgres_session, sample_station_data):
 
 
 @pytest.mark.asyncio
-async def test_bulk_insert_timescaledb(postgres_session):
+async def test_bulk_insert_timescaledb(postgres_session_with_data):
     """Test bulk insert su hypertable TimescaleDB."""
-    repo = MeasurementRepository(postgres_session)
+    from src.database.models import SamplingPoint
+    
+    repo = MeasurementRepository(postgres_session_with_data)
+    
+    # Crea sampling points necessari
+    sampling_points = [
+        SamplingPoint(
+            sampling_point_id=f"IT/SPO.TEST{i:03d}_8_chemi_2023-01-01",
+            country_code="IT",
+            pollutant_code=8
+        )
+        for i in range(10)
+    ]
+    postgres_session_with_data.add_all(sampling_points)
+    await postgres_session_with_data.commit()
     
     # Crea 1000 measurements
     measurements = [
@@ -63,15 +69,26 @@ async def test_bulk_insert_timescaledb(postgres_session):
     assert count == 1000
     
     # Verifica inserimento
-    await postgres_session.commit()
+    await postgres_session_with_data.commit()
     latest = await repo.get_latest("IT/SPO.TEST000_8_chemi_2023-01-01", limit=10)
     assert len(latest) > 0
 
 
 @pytest.mark.asyncio
-async def test_time_range_delete(postgres_session):
+async def test_time_range_delete(postgres_session_with_data):
     """Test delete di range temporali."""
-    repo = MeasurementRepository(postgres_session)
+    from src.database.models import SamplingPoint
+    
+    repo = MeasurementRepository(postgres_session_with_data)
+    
+    # Crea sampling point necessario
+    sp = SamplingPoint(
+        sampling_point_id="IT/SPO.TEST_DELETE",
+        country_code="IT",
+        pollutant_code=5
+    )
+    postgres_session_with_data.add(sp)
+    await postgres_session_with_data.commit()
     
     # Inserisci dati
     measurements = [
@@ -88,7 +105,7 @@ async def test_time_range_delete(postgres_session):
     ]
     
     await repo.bulk_insert(measurements)
-    await postgres_session.commit()
+    await postgres_session_with_data.commit()
     
     # Delete ore 10-15
     deleted = await repo.delete_time_range(
@@ -96,7 +113,7 @@ async def test_time_range_delete(postgres_session):
         datetime(2023, 1, 1, 10, 0, tzinfo=timezone.utc),
         datetime(2023, 1, 1, 15, 0, tzinfo=timezone.utc),
     )
-    await postgres_session.commit()
+    await postgres_session_with_data.commit()
     
     # Verifica che siano state cancellate 6 ore (10,11,12,13,14,15)
     assert deleted == 6

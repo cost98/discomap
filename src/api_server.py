@@ -27,6 +27,7 @@ from src.config import Config
 from src.db_writer import PostgreSQLWriter
 from src.logger import get_logger
 from src.sync_scheduler import SyncScheduler
+from src.api import api_router  # Import new API routes
 
 logger = get_logger(__name__)
 
@@ -40,6 +41,10 @@ async def lifespan(app: FastAPI):
     logger.info("🚀 API Server starting...")
     yield
     logger.info("🛑 API Server shutting down...")
+    
+    # Cleanup database connections
+    from src.database.session import close_engine
+    await close_engine()
 
 
 app = FastAPI(
@@ -48,6 +53,9 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+# Include new API routes
+app.include_router(api_router)
 
 # CORS for Grafana
 app.add_middleware(

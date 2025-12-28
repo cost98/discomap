@@ -90,6 +90,29 @@ VALIDITY_FLAGS = {
 VERIFICATION_FLAGS = {1: "Verified", 2: "Preliminary verified", 3: "Not verified"}
 
 
+class Settings:
+    """Settings for database and API configuration."""
+    
+    def __init__(self):
+        # Build database URL from environment variables
+        db_host = os.getenv("DB_HOST", "localhost")
+        db_port = os.getenv("DB_PORT", "5432")
+        db_name = os.getenv("DB_NAME", "discomap")
+        db_user = os.getenv("DB_USER", "discomap")
+        db_password = os.getenv("DB_PASSWORD", "changeme")
+        
+        self.database_url = (
+            f"postgresql+asyncpg://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+        )
+        self.database_schema = os.getenv("DATABASE_SCHEMA", "airquality")
+        self.api_host = os.getenv("API_HOST", "0.0.0.0")
+        self.api_port = int(os.getenv("API_PORT", "8000"))
+
+
+# Global settings instance
+settings = Settings()
+
+
 if __name__ == "__main__":
     Config.ensure_directories()
     print("Configuration Summary")

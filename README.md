@@ -440,6 +440,206 @@ This project uses data from the European Environment Agency (EEA). Please refer 
 
 ---
 
-Made with ?? for air quality monitoring
+## 🚀 Import API
+
+High-performance data import system using PostgreSQL COPY (13,000+ rec/s - **5.4x faster** than ORM).
+
+### Base URL
+
+```
+http://localhost:8000/api/v1/import
+```
+
+### Performance
+
+| Method | Rate (rec/s) | Time (1M records) | Speedup |
+|--------|--------------|-------------------|---------|
+| ORM | 2,560 | 391s | 1x |
+| **COPY** | **13,707** | **73s** | **5.4x** ⚡ |
+
+### Endpoints
+
+#### 1. Import from URLs
+
+```http
+POST /api/v1/import/parquet
+```
+
+Import Parquet files from URL list.
+
+**Request:**
+```json
+{
+  "urls": [
+    "https://eeadmz1-downloads-webapp.azurewebsites.net/api/parquet/IT_5_20230101010000_20230101020000.parquet"
+  ],
+  "max_workers": 8,
+  "batch_size": 100000
+}
+```
+
+**cURL:**
+```bash
+curl -X POST "http://localhost:8000/api/v1/import/parquet" \
+     -H "Content-Type: application/json" \
+     -d '{"urls":["https://example.com/data.parquet"],"max_workers":8}'
+```
+
+**Python:**
+```python
+import requests
+
+response = requests.post(
+    "http://localhost:8000/api/v1/import/parquet",
+    json={"urls": ["https://example.com/data.parquet"], "max_workers": 8}
+)
+job_id = response.json()["job_id"]
+```
+
+---
+
+#### 2. Job Status
+
+```http
+GET /api/v1/import/jobs/{job_id}
+```
+
+Get import job status and progress.
+
+**cURL:**
+```bash
+curl "http://localhost:8000/api/v1/import/jobs/{job_id}"
+```
+
+**Response:**
+```json
+{
+  "job_id": "...",
+  "status": "running",
+  "total_records": 50000,
+  "processed_records": 25000,
+  "import_rate": 12500,
+  "elapsed_seconds": 2.0
+}
+```
+
+---
+
+#### 3. List Jobs
+
+```http
+GET /api/v1/import/jobs?status=completed&limit=100
+```
+
+List all import jobs.
+
+---
+
+#### 4. Statistics
+
+```http
+GET /api/v1/import/stats
+```
+
+Get overall import statistics.
+
+---
+
+#### 5. Cancel Job
+
+```http
+DELETE /api/v1/import/jobs/{job_id}
+```
+
+Cancel a running job.
+
+---
+
+```python
+import asyncio
+from src.services.parquet_copy_importer import import_eea_data_with_copy
+from src.database.session import get_async_session
+
+async def import_data():
+    urls = [
+        "https://example.com/data1.parquet",
+        "https://example.com/data2.parquet",
+    ]
+    
+    async for session in get_async_session():
+        result = await import_eea_data_with_copy(
+            session=session,
+            parquet_urls=urls,
+            max_workers=8,
+        )
+        
+        print(f"Imported {result['total_records']:,} records")
+        print(f"Rate: {result['rate']:.0f} rec/s")
+        break
+
+asyncio.run(import_data())
+```
+
+### Performance Tuning
+
+#### Batch Size
+- **Small (1K-10K)**: Lower memory, more overhead
+- **Medium (50K-100K)**: Balanced ✅ **(recommended)**
+- **Large (500K-1M)**: Higher memory, less overhead
+
+#### Parallel Workers
+- **Local files**: 4-8 workers
+- **Network files**: 8-16 workers
+- **High bandwidth**: 16-32 workers
+
+#### Connection Pool
+```python
+# In session.py
+engine = create_async_engine(
+    url,
+    pool_size=20,      # Base connections
+    max_overflow=10,   # Additional connections
+)
+```
+
+### Testing
+
+```bash
+# Unit tests
+pytest tests/unit/test_bulk_import.py -v
+
+# Integration tests
+pytest tests/integration/test_bulk_copy_integration.py -v
+
+# Performance tests (1M records)
+pytest tests/performance/test_bulk_insert.py -v
+```
+
+### Troubleshooting
+
+#### Slow Import Speed (< 5000 rec/s)
+- Increase `batch_size` to 100K-200K
+- Increase `max_workers` (8-16)
+- Check database CPU/memory
+- Verify network bandwidth
+
+#### Memory Issues
+- Reduce `batch_size` to 50K
+- Reduce `max_workers`
+- Use generator-based imports
+
+#### Connection Pool Exhausted
+```python
+# Increase pool size
+engine = create_async_engine(
+    url,
+    pool_size=30,
+    max_overflow=20,
+)
+```
+
+---
+
+Made with 💚 for air quality monitoring
 
 

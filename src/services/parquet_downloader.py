@@ -29,7 +29,7 @@ class ParquetDownloader:
         self,
         url: str,
         filename: Optional[str] = None,
-        chunk_size: int = 8192,
+        chunk_size: int = 16384,  # 16KB - bilanciato
     ) -> Path:
         """Download Parquet file from URL.
         

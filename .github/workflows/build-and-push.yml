@@ -1,14 +1,8 @@
-name: Build and Push Docker Images
+name: Build Docker Images
 
 on:
   push:
-    branches:
-      - main
-    tags:
-      - 'v*.*.*'
   pull_request:
-    branches:
-      - main
   workflow_dispatch:
 
 env:
@@ -62,21 +56,21 @@ jobs:
             type=sha,prefix={{branch}}-
             type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Build and push API image
+      - name: Build API image
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./.docker/Dockerfile.api
-          push: true
+          push: false
           tags: ${{ steps.meta-api.outputs.tags }}
           labels: ${{ steps.meta-api.outputs.labels }}
 
-      - name: Build and push PostgreSQL image
+      - name: Build PostgreSQL image
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./.docker/Dockerfile.postgres
-          push: true
+          push: false
           tags: ${{ steps.meta-postgres.outputs.tags }}
           labels: ${{ steps.meta-postgres.outputs.labels }}
 

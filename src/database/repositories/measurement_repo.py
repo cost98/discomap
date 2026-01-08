@@ -19,7 +19,7 @@ class MeasurementRepository:
 
     async def bulk_insert(self, measurements: List[dict]) -> int:
         """
-        Inserimento bulk di misurazioni (ottimizzato per TimescaleDB).
+        Inserimento bulk di misurazioni (ottimizzato con executemany).
         
         Uso:
             measurements = [
@@ -31,7 +31,7 @@ class MeasurementRepository:
         if not measurements:
             return 0
         
-        # Usa bulk insert di SQLAlchemy
+        # Usa execute con insert - asyncpg usa executemany ottimizzato
         await self.session.execute(
             Measurement.__table__.insert(),
             measurements

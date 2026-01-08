@@ -25,15 +25,11 @@ def get_engine() -> AsyncEngine:
     global _engine
     
     if _engine is None:
-        config = Config()
-        db_url = (
-            f"postgresql+asyncpg://{config.DB_USER}:{config.DB_PASSWORD}"
-            f"@{config.DB_HOST}:{config.DB_PORT}/{config.DB_NAME}"
-        )
+        from src.config import settings
         
-        logger.info(f"Creazione engine database: {config.DB_HOST}:{config.DB_PORT}/{config.DB_NAME}")
+        logger.info(f"Creazione engine database: {settings.database_url.split('@')[1]}")
         _engine = create_async_engine(
-            db_url,
+            settings.database_url,
             echo=False,  # Metti True per debug SQL
             pool_size=5,
             max_overflow=10,

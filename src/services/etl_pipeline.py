@@ -73,23 +73,40 @@ class ETLPipeline:
             ... )
             >>> print(f"Inserted {stats['measurements']} measurements")
         """
-        logger.info(f"Starting ETL for URL: {url}")
+        import time
+        start_time = time.time()
+        
+        logger.info(f"🚀 Starting ETL for URL: {url}")
         
         # 1. Download (se necessario)
+        download_start = time.time()
         if skip_download:
             filename = url.split("/")[-1]
             filepath = Path(self.downloader.output_dir) / filename
-            logger.info(f"Skipping download, using: {filepath}")
+            logger.info(f"⏩ Skipping download, using: {filepath}")
         else:
             filepath = self.downloader.download(url)
+            download_time = time.time() - download_start
+            logger.info(f"📥 Download completed in {download_time:.2f}s")
         
         # 2. Parse
+        parse_start = time.time()
         data = self.parser.parse_all(filepath)
+        parse_time = time.time() - parse_start
+        logger.info(f"📊 Parsing completed in {parse_time:.2f}s - {len(data['measurements'])} measurements")
         
         # 3. Load
+        load_start = time.time()
         stats = await self._load_to_database(data)
+        load_time = time.time() - load_start
         
-        logger.info(f"ETL complete - {stats}")
+        total_time = time.time() - start_time
+        throughput = stats['measurements'] / total_time if total_time > 0 else 0
+        
+        logger.info(f"💾 Database load completed in {load_time:.2f}s")
+        logger.info(f"✅ ETL complete - Total: {total_time:.2f}s | Throughput: {throughput:.0f} meas/sec")
+        logger.info(f"📈 Stats - Stations: {stats['stations']}, Sampling Points: {stats['sampling_points']}, Measurements: {stats['measurements']}")
+        
         return stats
 
     async def run_from_file(self, filepath: Path) -> Dict[str, int]:
@@ -170,7 +187,7 @@ class ETLPipeline:
         Returns:
             Statistics dictionary
         """
-        logger.info("Starting database load...")
+        logger.info("💾 Starting database load...")
         
         stats = {
             "stations": 0,
@@ -186,9 +203,9 @@ class ETLPipeline:
                     await station_repo.create_or_update(station_data)
                     stats["stations"] += 1
                 except Exception as e:
-                    logger.warning(f"Station insert error: {e}")
+                    logger.error(f"Station insert error: {e}", exc_info=True)
             
-            logger.info(f"Loaded {stats['stations']} stations")
+            logger.info(f"🏢 Loaded {stats['stations']} stations")
             
             # 2. Sampling Points
             sp_repo = SamplingPointRepository(session)
@@ -197,24 +214,29 @@ class ETLPipeline:
                     await sp_repo.create_or_update(sp_data)
                     stats["sampling_points"] += 1
                 except Exception as e:
-                    logger.warning(f"Sampling point insert error: {e}")
+                    logger.error(f"Sampling point insert error: {e}", exc_info=True)
             
-            logger.info(f"Loaded {stats['sampling_points']} sampling points")
+            logger.info(f"📍 Loaded {stats['sampling_points']} sampling points")
             
             # 3. Measurements (bulk insert in batches)
             meas_repo = MeasurementRepository(session)
             measurements = data["measurements"]
+            total_batches = (len(measurements) + self.batch_size - 1) // self.batch_size
+            
+            logger.info(f"📦 Inserting {len(measurements)} measurements in {total_batches} batches...")
             
             for i in range(0, len(measurements), self.batch_size):
                 batch = measurements[i : i + self.batch_size]
+                batch_num = i // self.batch_size + 1
                 try:
                     count = await meas_repo.bulk_insert(batch)
                     stats["measurements"] += count
-                    logger.debug(f"Inserted batch {i // self.batch_size + 1}: {count} measurements")
+                    progress = (stats["measurements"] / len(measurements)) * 100
+                    logger.debug(f"  Batch {batch_num}/{total_batches}: +{count} measurements ({progress:.1f}%)")
                 except Exception as e:
                     logger.error(f"Measurement batch insert error: {e}", exc_info=True)
             
-            logger.info(f"Loaded {stats['measurements']} measurements")
+            logger.info(f"✅ Loaded {stats['measurements']:,} measurements")
             
             # Commit transaction
             await session.commit()

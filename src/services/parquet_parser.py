@@ -36,21 +36,29 @@ class ParquetParser:
         
         # Sampling Point fields
         "SamplingPoint": "sampling_point_id",
+        "Samplingpoint": "sampling_point_id",  # Alternative format
         "AirPollutantCode": "pollutant_code",
+        "Pollutant": "pollutant_code",  # Alternative format
         "SamplingPointStartDate": "sp_start_date",
         "SamplingPointEndDate": "sp_end_date",
         
         # Measurement fields
         "DatetimeBegin": "time",
+        "Start": "time",  # Alternative format
         "DatetimeEnd": "datetime_end",
+        "End": "datetime_end",  # Alternative format
         "Concentration": "value",
+        "Value": "value",  # Alternative format
         "UnitOfMeasurement": "unit",
+        "Unit": "unit",  # Alternative format
         "AggregationType": "aggregation_type",
+        "AggType": "aggregation_type",  # Alternative format
         "Validity": "validity",
         "Verification": "verification",
         "DataCapture": "data_capture",
         "ResultTime": "result_time",
         "ObservationId": "observation_id",
+        "FkObservationLog": "observation_id",  # Alternative format
     }
 
     def __init__(self):
@@ -90,41 +98,68 @@ class ParquetParser:
         """
         logger.info("Extracting stations...")
         
-        # Colonne necessarie per Station
-        station_cols = [
-            "AirQualityStationEoICode",
-            "Countrycode", 
-            "AirQualityStationName",
-            "AirQualityStationType",
-            "AirQualityStationArea",
-            "Latitude",
-            "Longitude",
-            "Altitude",
-            "Municipality",
-        ]
+        # Check if we have direct station info or need to extract from Samplingpoint
+        has_station_col = "AirQualityStationEoICode" in df.columns
+        has_samplingpoint = "Samplingpoint" in df.columns or "SamplingPoint" in df.columns
         
-        # Seleziona e rinomina
-        available_cols = [col for col in station_cols if col in df.columns]
-        df_stations = df[available_cols].drop_duplicates(subset=["AirQualityStationEoICode"])
-        
-        # Converti in dict
         stations = []
-        for _, row in df_stations.iterrows():
-            station = {}
-            for eea_col, db_col in self.COLUMN_MAPPING.items():
-                if eea_col in row and pd.notna(row[eea_col]):
-                    value = row[eea_col]
-                    
-                    # Conversioni tipo
-                    if db_col in ["latitude", "longitude", "altitude"]:
-                        station[db_col] = float(value)
-                    elif db_col in ["start_date", "end_date"]:
-                        station[db_col] = self._parse_date(value)
-                    else:
-                        station[db_col] = str(value) if not pd.isna(value) else None
+        
+        if has_station_col:
+            # Old format: station info is directly available
+            station_cols = [
+                "AirQualityStationEoICode",
+                "Countrycode", 
+                "AirQualityStationName",
+                "AirQualityStationType",
+                "AirQualityStationArea",
+                "Latitude",
+                "Longitude",
+                "Altitude",
+                "Municipality",
+            ]
             
-            if "station_code" in station:
-                stations.append(station)
+            available_cols = [col for col in station_cols if col in df.columns]
+            df_stations = df[available_cols].drop_duplicates(subset=["AirQualityStationEoICode"])
+            
+            for _, row in df_stations.iterrows():
+                station = {}
+                for eea_col, db_col in self.COLUMN_MAPPING.items():
+                    if eea_col in row and pd.notna(row[eea_col]):
+                        value = row[eea_col]
+                        
+                        if db_col in ["latitude", "longitude", "altitude"]:
+                            station[db_col] = float(value)
+                        elif db_col in ["start_date", "end_date"]:
+                            station[db_col] = self._parse_date(value)
+                        else:
+                            station[db_col] = str(value) if not pd.isna(value) else None
+                
+                if "station_code" in station:
+                    stations.append(station)
+        
+        elif has_samplingpoint:
+            # New format: extract station code from Samplingpoint field
+            # Format: "PT/SPO-PT02022_00008_100" → station_code = "PT02022"
+            sp_col = "Samplingpoint" if "Samplingpoint" in df.columns else "SamplingPoint"
+            
+            station_codes = set()
+            for sp_id in df[sp_col].dropna().unique():
+                # Extract country and station code from sampling point
+                # Format: CC/SPO-SSSSSS_XXXXX_YYY where CC=country, SSSSSS=station
+                if "/" in sp_id:
+                    parts = sp_id.split("/")
+                    if len(parts) >= 2:
+                        country_code = parts[0]
+                        # Extract station code from "SPO-PT02022_00008_100"
+                        station_part = parts[1].replace("SPO-", "").split("_")[0]
+                        
+                        station_code = f"{country_code}/{station_part}"
+                        if station_code not in station_codes:
+                            station_codes.add(station_code)
+                            stations.append({
+                                "station_code": station_code,
+                                "country_code": country_code,
+                            })
         
         logger.info(f"Extracted {len(stations)} unique stations")
         return stations
@@ -141,31 +176,56 @@ class ParquetParser:
         """
         logger.info("Extracting sampling points...")
         
-        sp_cols = [
-            "SamplingPoint",
-            "AirQualityStationEoICode",
-            "Countrycode",
-            "AirPollutantCode",
-        ]
+        # Determine available column names (support both formats)
+        sp_col = None
+        if "SamplingPoint" in df.columns:
+            sp_col = "SamplingPoint"
+        elif "Samplingpoint" in df.columns:
+            sp_col = "Samplingpoint"
         
-        available_cols = [col for col in sp_cols if col in df.columns]
-        df_sp = df[available_cols].drop_duplicates(subset=["SamplingPoint"])
+        pollutant_col = None
+        if "AirPollutantCode" in df.columns:
+            pollutant_col = "AirPollutantCode"
+        elif "Pollutant" in df.columns:
+            pollutant_col = "Pollutant"
+        
+        if not sp_col or not pollutant_col:
+            logger.warning(f"Missing required columns for sampling points")
+            return []
+        
+        # Get unique combinations of sampling point + pollutant
+        df_sp = df[[sp_col, pollutant_col]].drop_duplicates()
         
         sampling_points = []
         for _, row in df_sp.iterrows():
-            sp = {}
+            sp_id = str(row[sp_col]) if pd.notna(row[sp_col]) else None
+            pollutant_code = int(row[pollutant_col]) if pd.notna(row[pollutant_col]) else None
             
-            if pd.notna(row.get("SamplingPoint")):
-                sp["sampling_point_id"] = str(row["SamplingPoint"])
-            if pd.notna(row.get("AirQualityStationEoICode")):
-                sp["station_code"] = str(row["AirQualityStationEoICode"])
-            if pd.notna(row.get("Countrycode")):
-                sp["country_code"] = str(row["Countrycode"])
-            if pd.notna(row.get("AirPollutantCode")):
-                sp["pollutant_code"] = int(row["AirPollutantCode"])
+            if not sp_id or not pollutant_code:
+                continue
             
-            if "sampling_point_id" in sp:
-                sampling_points.append(sp)
+            # Extract station code from sampling point ID
+            # Format: "PT/SPO-PT02022_00008_100" → station_code = "PT/PT02022"
+            station_code = None
+            country_code = None
+            if "/" in sp_id:
+                parts = sp_id.split("/")
+                if len(parts) >= 2:
+                    country_code = parts[0]
+                    station_part = parts[1].replace("SPO-", "").split("_")[0]
+                    station_code = f"{country_code}/{station_part}"
+            
+            sp = {
+                "sampling_point_id": sp_id,
+                "pollutant_code": pollutant_code,
+            }
+            
+            if station_code:
+                sp["station_code"] = station_code
+            if country_code:
+                sp["country_code"] = country_code
+            
+            sampling_points.append(sp)
         
         logger.info(f"Extracted {len(sampling_points)} unique sampling points")
         return sampling_points
@@ -182,26 +242,63 @@ class ParquetParser:
         """
         logger.info("Extracting measurements...")
         
+        # Determine column names (support both formats)
+        time_col = None
+        if "DatetimeBegin" in df.columns:
+            time_col = "DatetimeBegin"
+        elif "Start" in df.columns:
+            time_col = "Start"
+        
+        sp_col = None
+        if "SamplingPoint" in df.columns:
+            sp_col = "SamplingPoint"
+        elif "Samplingpoint" in df.columns:
+            sp_col = "Samplingpoint"
+        
+        pollutant_col = None
+        if "AirPollutantCode" in df.columns:
+            pollutant_col = "AirPollutantCode"
+        elif "Pollutant" in df.columns:
+            pollutant_col = "Pollutant"
+        
+        value_col = None
+        if "Concentration" in df.columns:
+            value_col = "Concentration"
+        elif "Value" in df.columns:
+            value_col = "Value"
+        
+        if not all([time_col, sp_col, pollutant_col]):
+            logger.error(f"Missing required columns. Found: time={time_col}, sp={sp_col}, pollutant={pollutant_col}")
+            return []
+        
         measurements = []
         
         for _, row in df.iterrows():
             meas = {}
             
             # Campi obbligatori
-            if pd.notna(row.get("DatetimeBegin")):
-                meas["time"] = self._parse_datetime(row["DatetimeBegin"])
-            if pd.notna(row.get("SamplingPoint")):
-                meas["sampling_point_id"] = str(row["SamplingPoint"])
-            if pd.notna(row.get("AirPollutantCode")):
-                meas["pollutant_code"] = int(row["AirPollutantCode"])
+            if pd.notna(row.get(time_col)):
+                meas["time"] = self._parse_datetime(row[time_col])
+            if pd.notna(row.get(sp_col)):
+                meas["sampling_point_id"] = str(row[sp_col])
+            if pd.notna(row.get(pollutant_col)):
+                meas["pollutant_code"] = int(row[pollutant_col])
             
-            # Campi opzionali
-            if pd.notna(row.get("Concentration")):
-                meas["value"] = float(row["Concentration"])
-            if pd.notna(row.get("UnitOfMeasurement")):
-                meas["unit"] = str(row["UnitOfMeasurement"])
-            if pd.notna(row.get("AggregationType")):
-                meas["aggregation_type"] = str(row["AggregationType"])
+            # Campi opzionali con nomi flessibili
+            if value_col and pd.notna(row.get(value_col)):
+                meas["value"] = float(row[value_col])
+            
+            # Unit
+            unit_col = "UnitOfMeasurement" if "UnitOfMeasurement" in df.columns else "Unit"
+            if unit_col in df.columns and pd.notna(row.get(unit_col)):
+                meas["unit"] = str(row[unit_col])
+            
+            # Aggregation type
+            agg_col = "AggregationType" if "AggregationType" in df.columns else "AggType"
+            if agg_col in df.columns and pd.notna(row.get(agg_col)):
+                meas["aggregation_type"] = str(row[agg_col])
+            
+            # Altri campi opzionali
             if pd.notna(row.get("Validity")):
                 meas["validity"] = int(row["Validity"])
             if pd.notna(row.get("Verification")):
@@ -210,8 +307,11 @@ class ParquetParser:
                 meas["data_capture"] = float(row["DataCapture"])
             if pd.notna(row.get("ResultTime")):
                 meas["result_time"] = self._parse_datetime(row["ResultTime"])
-            if pd.notna(row.get("ObservationId")):
-                meas["observation_id"] = str(row["ObservationId"])
+            
+            # Observation ID
+            obs_col = "ObservationId" if "ObservationId" in df.columns else "FkObservationLog"
+            if obs_col in df.columns and pd.notna(row.get(obs_col)):
+                meas["observation_id"] = str(row[obs_col])
             
             # Aggiungi solo se ha campi obbligatori
             if all(k in meas for k in ["time", "sampling_point_id", "pollutant_code"]):
@@ -256,16 +356,36 @@ class ParquetParser:
 
     @staticmethod
     def _parse_datetime(value) -> Optional[datetime]:
-        """Parse datetime from various formats."""
+        """Parse datetime from various formats, ensuring UTC timezone."""
         if pd.isna(value):
             return None
+        
+        # If already datetime, ensure it has timezone
         if isinstance(value, datetime):
+            if value.tzinfo is None:
+                # Add UTC timezone to naive datetime
+                import pytz
+                return pytz.UTC.localize(value)
             return value
+        
+        # If pandas Timestamp, convert to datetime with UTC
+        if hasattr(value, 'tz_localize'):
+            # Pandas Timestamp
+            if value.tz is None:
+                # Naive timestamp - localize to UTC
+                value = value.tz_localize('UTC')
+            return value.to_pydatetime()
+        
+        # If string, parse and add UTC
         if isinstance(value, str):
             try:
-                return pd.to_datetime(value).to_pydatetime()
+                dt = pd.to_datetime(value)
+                if dt.tz is None:
+                    dt = dt.tz_localize('UTC')
+                return dt.to_pydatetime()
             except Exception:
                 return None
+        
         return None
 
     @staticmethod

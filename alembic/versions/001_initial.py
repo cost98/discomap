@@ -87,7 +87,7 @@ def upgrade() -> None:
         sa.Column('region', sa.String(length=100), nullable=True),
         sa.Column('start_date', sa.Date(), nullable=True),
         sa.Column('end_date', sa.Date(), nullable=True),
-        sa.Column('extra_metadata', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column('metadata', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
         sa.ForeignKeyConstraint(['country_code'], ['airquality.countries.country_code'], ),
@@ -107,7 +107,7 @@ def upgrade() -> None:
         sa.Column('pollutant_code', sa.Integer(), nullable=True),
         sa.Column('start_date', sa.DateTime(timezone=True), nullable=True),
         sa.Column('end_date', sa.DateTime(timezone=True), nullable=True),
-        sa.Column('extra_metadata', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column('metadata', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
         sa.ForeignKeyConstraint(['country_code'], ['airquality.countries.country_code'], ),
@@ -157,10 +157,7 @@ def upgrade() -> None:
     op.execute("""
         INSERT INTO airquality.countries (country_code, country_name, region) VALUES
         ('IT', 'Italy', 'Southern Europe'),
-        ('AT', 'Austria', 'Central Europe'),
-        ('BE', 'Belgium', 'Western Europe'),
-        ('FR', 'France', 'Western Europe'),
-        ('DE', 'Germany', 'Central Europe'),
+        ('PT', 'Portugal', 'Southern Europe'),
         ('ES', 'Spain', 'Southern Europe')
         ON CONFLICT (country_code) DO NOTHING
     """)
@@ -180,9 +177,12 @@ def upgrade() -> None:
     # Insert lookup data - Validity flags
     op.execute("""
         INSERT INTO airquality.validity_flags (validity_code, validity_name, description) VALUES
+        (-99, 'Not valid (maintenance)', 'Not valid due to station maintenance or calibration'),
+        (-1, 'Not valid', 'Not valid'),
         (1, 'Valid', 'Valid measurement'),
-        (2, 'Invalid', 'Invalid measurement'),
-        (3, 'Unverified', 'Not yet verified')
+        (2, 'Valid (below detection)', 'Valid, but below detection limit'),
+        (3, 'Valid (below detection/LOQ)', 'Valid, but below detection limit and limit of quantification'),
+        (4, 'Valid (CCQM.O3.2019)', 'Valid (Ozone only) using CCQM.O3.2019')
         ON CONFLICT (validity_code) DO NOTHING
     """)
     

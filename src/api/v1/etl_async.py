@@ -1,4 +1,4 @@
-"""ETL endpoints."""
+"""Asynchronous ETL endpoints with batch processing (URL list based)."""
 
 import asyncio
 import logging
@@ -12,30 +12,23 @@ from src.logger import get_logger
 from src.services import ETLPipeline
 
 logger = get_logger(__name__)
-router = APIRouter()
+router = APIRouter(prefix="/async", tags=["ETL Async - URL Jobs"])
 
 # In-memory job tracking (per produzione: Redis/Database)
 _jobs: dict[str, dict] = {}
 
 
-# Request/Response models
-class ETLRequest(BaseModel):
-    """ETL run request (sync - single URL)."""
-    url: str
-    skip_download: bool = False
-
-
-class ETLResponse(BaseModel):
-    """ETL run response (sync)."""
-    success: bool
-    message: str
-    stats: dict | None = None
+class JobStatus(str, Enum):
+    """Job execution status."""
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
 
 
 class BatchETLRequest(BaseModel):
     """Batch ETL request (async - multiple URLs)."""
     urls: list[str]
-    skip_download: bool = False
     
     @field_validator('urls')
     @classmethod
@@ -45,14 +38,6 @@ class BatchETLRequest(BaseModel):
         if len(v) > 50:
             raise ValueError("Massimo 50 URL per batch")
         return v
-
-
-class JobStatus(str, Enum):
-    """Job execution status."""
-    PENDING = "pending"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    FAILED = "failed"
 
 
 class BatchETLResponse(BaseModel):
@@ -78,68 +63,16 @@ class BatchJobStatus(BaseModel):
     errors: list[str] | None = None
 
 
-@router.post("/run", response_model=ETLResponse)
-async def run_etl(request: ETLRequest):
-    """
-    Run ETL pipeline from single Parquet URL (SYNCHRONOUS).
-    
-    Processes air quality data from EEA Parquet files:
-    1. Downloads data from provided URL
-    2. Parses and validates measurements
-    3. Stores in TimescaleDB
-    
-    Returns results immediately. For multiple URLs, use POST /batch.
-    
-    Args:
-        request: ETL configuration with URL and options
-        
-    Returns:
-        ETL execution statistics
-        
-    Example:
-        ```json
-        POST /api/v1/etl/run
-        {
-            "url": "https://eeadmz1batchservice02.blob.core.windows.net/...",
-            "skip_download": false
-        }
-        ```
-    """
-    try:
-        logger.info(f"📥 ETL request: {request.url}")
-        
-        pipeline = ETLPipeline()
-        stats = await pipeline.run_from_url(
-            request.url,
-            skip_download=request.skip_download,
-        )
-        
-        logger.info(f"✅ ETL completed: {stats}")
-        
-        return ETLResponse(
-            success=True,
-            message="ETL pipeline completed successfully",
-            stats=stats,
-        )
-    
-    except Exception as e:
-        logger.error(f"❌ ETL failed: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail=f"ETL pipeline failed: {str(e)}"
-        )
-
-
 @router.post("/batch", response_model=BatchETLResponse, status_code=202)
 async def run_batch_etl(request: BatchETLRequest):
     """
     Run ETL pipeline for multiple URLs (ASYNCHRONOUS).
     
     Starts background processing and returns job ID immediately.
-    Use GET /batch/{job_id} to check status.
+    Use GET /async/status/{job_id} to check progress.
     
     Recommended for:
-    - Multiple URLs (up to 50)
+    - Multiple URLs (2-50)
     - Long-running operations
     - Avoiding HTTP timeouts
     
@@ -151,13 +84,12 @@ async def run_batch_etl(request: BatchETLRequest):
         
     Example:
         ```json
-        POST /api/v1/etl/batch
+        POST /api/v1/etl/async/batch
         {
             "urls": [
                 "https://example.com/file1.parquet",
                 "https://example.com/file2.parquet"
-            ],
-            "skip_download": false
+            ]
         }
         ```
     """
@@ -179,7 +111,7 @@ async def run_batch_etl(request: BatchETLRequest):
     
     # Start background task
     asyncio.create_task(
-        _process_batch_job(job_id, request.urls, request.skip_download)
+        _process_batch_job(job_id, request.urls)
     )
     
     logger.info(f"📦 Batch job {job_id} created: {len(request.urls)} URLs")
@@ -193,7 +125,7 @@ async def run_batch_etl(request: BatchETLRequest):
     )
 
 
-@router.get("/batch/{job_id}", response_model=BatchJobStatus)
+@router.get("/status/{job_id}", response_model=BatchJobStatus)
 async def get_batch_status(job_id: str):
     """
     Get batch job status and progress.
@@ -203,7 +135,7 @@ async def get_batch_status(job_id: str):
         
     Example:
         ```
-        GET /api/v1/etl/batch/550e8400-e29b-41d4-a716-446655440000
+        GET /api/v1/etl/async/status/550e8400-e29b-41d4-a716-446655440000
         ```
     """
     if job_id not in _jobs:
@@ -231,7 +163,6 @@ async def get_batch_status(job_id: str):
 async def _process_batch_job(
     job_id: str,
     urls: list[str],
-    skip_download: bool,
 ):
     """
     Background task to process batch ETL job.
@@ -239,7 +170,6 @@ async def _process_batch_job(
     Args:
         job_id: Unique job identifier
         urls: List of Parquet URLs to process
-        skip_download: Skip download phase
     """
     job = _jobs[job_id]
     job["status"] = JobStatus.RUNNING
@@ -253,10 +183,7 @@ async def _process_batch_job(
         try:
             logger.info(f"📥 [{i}/{len(urls)}] Processing: {url}")
             
-            stats = await pipeline.run_from_url(
-                url,
-                skip_download=skip_download,
-            )
+            stats = await pipeline.run_from_url(url)
             
             job["stats"].append({
                 "url": url,
@@ -287,3 +214,4 @@ async def _process_batch_job(
         f"{job['processed_urls']} succeeded, {job['failed_urls']} failed "
         f"in {duration:.2f}s"
     )
+

@@ -165,12 +165,27 @@ def upgrade() -> None:
     # Insert lookup data - Pollutants
     op.execute("""
         INSERT INTO airquality.pollutants (pollutant_code, pollutant_name, pollutant_label, unit) VALUES
-        (1, 'SO2', 'Sulphur dioxide', 'µg/m³'),
-        (5, 'PM10', 'Particulate matter < 10 µm', 'µg/m³'),
-        (6001, 'PM2.5', 'Particulate matter < 2.5 µm', 'µg/m³'),
+        (1, 'PM10', 'Particulate matter < 10 µm', 'µg/m³'),
+        (5, 'PM2.5', 'Particulate matter < 2.5 µm', 'µg/m³'),
+        (6, 'NO2', 'Nitrogen dioxide (air)', 'µg/m³'),
         (7, 'O3', 'Ozone', 'µg/m³'),
         (8, 'NO2', 'Nitrogen dioxide', 'µg/m³'),
-        (10, 'CO', 'Carbon monoxide', 'mg/m³')
+        (9, 'NOx', 'Nitrogen oxides', 'µg/m³'),
+        (10, 'CO', 'Carbon monoxide', 'mg/m³'),
+        (14, 'SO2', 'Sulphur dioxide', 'µg/m³'),
+        (20, 'C6H6', 'Benzene', 'µg/m³'),
+        (21, 'Cd', 'Cadmium', 'ng/m³'),
+        (38, 'NO', 'Nitrogen monoxide', 'µg/m³'),
+        (46, 'PM1', 'Particulate matter < 1 µm', 'µg/m³'),
+        (47, 'BC', 'Black Carbon', 'µg/m³'),
+        (48, 'UFP', 'Ultrafine particles', '#/cm³'),
+        (49, 'PN', 'Particle number', '#/cm³'),
+        (59, 'BaP', 'Benzo(a)pyrene', 'ng/m³'),
+        (5012, 'Ni', 'Nickel', 'ng/m³'),
+        (5014, 'As', 'Arsenic', 'ng/m³'),
+        (5015, 'Pb', 'Lead', 'µg/m³'),
+        (5029, 'BaP', 'Benzo(a)pyrene (PM10)', 'ng/m³'),
+        (6001, 'PM2.5', 'Particulate matter < 2.5 µm (legacy)', 'µg/m³')
         ON CONFLICT (pollutant_code) DO NOTHING
     """)
     

@@ -36,24 +36,31 @@ class ETLPipeline:
     def __init__(
         self,
         output_dir: str = "data/raw/parquet",
-        batch_size: int = 1000,
+        batch_size: int = 50000,
+        cleanup_after_processing: bool = True,
+        max_concurrent_files: int = 3,
     ):
         """
         Initialize ETL pipeline.
         
         Args:
             output_dir: Directory for downloaded Parquet files
-            batch_size: Batch size for measurement inserts
+            batch_size: Batch size for measurement inserts (default 50000 - COPY scala bene)
+            cleanup_after_processing: Delete files after successful processing
+            max_concurrent_files: Max files to process in parallel (default 3)
         """
         self.downloader = URLDownloader(output_dir=output_dir)
         self.parser = ParquetParser()
         self.batch_size = batch_size
+        self.cleanup_after_processing = cleanup_after_processing
+        self.max_concurrent_files = max_concurrent_files
         
-        logger.info(f"ETL Pipeline initialized - batch_size={batch_size}")
+        logger.info(f"ETL Pipeline initialized - batch_size={batch_size}, cleanup={cleanup_after_processing}")
 
     async def process_parquet_file(
         self,
         filepath: Path | str,
+        cleanup: bool | None = None,
     ) -> Dict[str, int]:
         """
         Process a Parquet file: Parse + Load to database.
@@ -62,6 +69,7 @@ class ETLPipeline:
         
         Args:
             filepath: Path to local Parquet file
+            cleanup: Delete file after processing (None = use instance default)
             
         Returns:
             Statistics dictionary with counts
@@ -95,6 +103,15 @@ class ETLPipeline:
         logger.info(f"💾 Database load completed in {load_time:.2f}s")
         logger.info(f"✅ ETL complete - Total: {total_time:.2f}s | Throughput: {throughput:.0f} meas/sec")
         logger.info(f"📈 Stats - Stations: {stats['stations']}, Sampling Points: {stats['sampling_points']}, Measurements: {stats['measurements']}")
+        
+        # Cleanup file if requested
+        should_cleanup = cleanup if cleanup is not None else self.cleanup_after_processing
+        if should_cleanup:
+            try:
+                filepath.unlink()
+                logger.info(f"🗑️  Deleted processed file: {filepath.name}")
+            except Exception as e:
+                logger.warning(f"⚠️  Could not delete file {filepath.name}: {e}")
         
         return stats
 
@@ -148,7 +165,7 @@ class ETLPipeline:
         max_files: Optional[int] = None,
     ) -> Dict[str, int]:
         """
-        Run ETL for multiple URLs in batch.
+        Run ETL for multiple URLs in batch with parallel processing.
         
         Args:
             urls: List of Parquet URLs
@@ -157,7 +174,7 @@ class ETLPipeline:
         Returns:
             Aggregated statistics
         """
-        logger.info(f"Starting batch ETL for {len(urls)} URLs")
+        logger.info(f"🚀 Starting parallel batch ETL for {len(urls)} URLs (max {self.max_concurrent_files} concurrent)")
         
         if max_files:
             urls = urls[:max_files]
@@ -170,28 +187,43 @@ class ETLPipeline:
             "errors": 0,
         }
         
-        for i, url in enumerate(urls, 1):
-            try:
-                logger.info(f"Processing file {i}/{len(urls)}: {url}")
-                stats = await self.run_from_url(url)
-                
+        # Semaphore per limitare file concorrenti
+        semaphore = asyncio.Semaphore(self.max_concurrent_files)
+        
+        async def process_with_semaphore(url: str, index: int):
+            """Process single URL with semaphore control."""
+            async with semaphore:
+                try:
+                    logger.info(f"⚡ [{index}/{len(urls)}] Processing: {url.split('/')[-1]}")
+                    stats = await self.run_from_url(url)
+                    return {"success": True, "stats": stats}
+                except Exception as e:
+                    logger.error(f"❌ [{index}/{len(urls)}] Error: {e}", exc_info=True)
+                    return {"success": False, "error": str(e)}
+        
+        # Process all URLs in parallel (limited by semaphore)
+        tasks = [process_with_semaphore(url, i+1) for i, url in enumerate(urls)]
+        results = await asyncio.gather(*tasks)
+        
+        # Aggregate results
+        for result in results:
+            if result["success"]:
                 total_stats["files_processed"] += 1
-                total_stats["stations"] += stats["stations"]
-                total_stats["sampling_points"] += stats["sampling_points"]
-                total_stats["measurements"] += stats["measurements"]
-                
-            except Exception as e:
-                logger.error(f"Error processing {url}: {e}", exc_info=True)
+                total_stats["stations"] += result["stats"]["stations"]
+                total_stats["sampling_points"] += result["stats"]["sampling_points"]
+                total_stats["measurements"] += result["stats"]["measurements"]
+            else:
                 total_stats["errors"] += 1
         
-        logger.info(f"Batch ETL complete - {total_stats}")
+        logger.info(f"✅ Parallel batch ETL complete - {total_stats}")
         return total_stats
 
     async def _load_to_database(self, data: Dict[str, List[Dict]]) -> Dict[str, int]:
         """
         Load parsed data into database.
         
-        Order: stations → sampling_points → measurements (rispetta FK constraints)
+        PREREQUISITO: Stations e Sampling Points devono essere già caricati via CSV!
+        Questa pipeline inserisce SOLO measurements per sampling_points esistenti.
         
         Args:
             data: Parsed data from ParquetParser
@@ -208,27 +240,9 @@ class ETLPipeline:
         }
         
         async with get_db_session() as session:
-            # 1. Stations
-            station_repo = StationRepository(session)
-            for station_data in data["stations"]:
-                try:
-                    await station_repo.create_or_update(station_data)
-                    stats["stations"] += 1
-                except Exception as e:
-                    logger.error(f"Station insert error: {e}", exc_info=True)
-            
-            logger.info(f"🏢 Loaded {stats['stations']} stations")
-            
-            # 2. Sampling Points
-            sp_repo = SamplingPointRepository(session)
-            for sp_data in data["sampling_points"]:
-                try:
-                    await sp_repo.create_or_update(sp_data)
-                    stats["sampling_points"] += 1
-                except Exception as e:
-                    logger.error(f"Sampling point insert error: {e}", exc_info=True)
-            
-            logger.info(f"📍 Loaded {stats['sampling_points']} sampling points")
+            # 1. Stations - SKIPPED (caricati da CSV DataExtract)
+            # 2. Sampling Points - SKIPPED (caricati da CSV DataExtract)
+            # Solo measurements vengono inseriti dalla pipeline ETL
             
             # 3. Measurements (bulk insert in batches)
             meas_repo = MeasurementRepository(session)
@@ -241,7 +255,8 @@ class ETLPipeline:
                 batch = measurements[i : i + self.batch_size]
                 batch_num = i // self.batch_size + 1
                 try:
-                    count = await meas_repo.bulk_insert(batch)
+                    # Usa PostgreSQL COPY per 5-10x speedup
+                    count = await meas_repo.bulk_copy(batch)
                     stats["measurements"] += count
                     progress = (stats["measurements"] / len(measurements)) * 100
                     logger.debug(f"  Batch {batch_num}/{total_batches}: +{count} measurements ({progress:.1f}%)")

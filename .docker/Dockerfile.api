@@ -2,12 +2,19 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# Install PostgreSQL client for healthcheck
+RUN apt-get update && apt-get install -y postgresql-client && rm -rf /var/lib/apt/lists/*
+
 # Install dependencies
 COPY .docker/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application
 COPY src/ ./src/
+COPY alembic/ ./alembic/
+COPY alembic.ini .
+COPY .docker/entrypoint.sh .
+RUN chmod +x entrypoint.sh
 
 # Set PYTHONPATH
 ENV PYTHONPATH=/app
@@ -15,5 +22,5 @@ ENV PYTHONPATH=/app
 # Expose API port
 EXPOSE 8000
 
-# Run API server
-CMD ["uvicorn", "src.api_server:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run API server with migrations
+CMD ["/bin/bash", "./entrypoint.sh"]

@@ -1,6 +1,6 @@
-"""Service for downloading Parquet files from Azure Blob Storage.
+"""Service for downloading Parquet files from URLs.
 
-Downloads EEA air quality data files from blob.core.windows.net URLs.
+Downloads EEA air quality data files from HTTP/HTTPS URLs.
 """
 
 import logging
@@ -12,7 +12,7 @@ import requests
 logger = logging.getLogger(__name__)
 
 
-class ParquetDownloader:
+class URLDownloader:
     """Download Parquet files from URLs."""
     
     def __init__(self, output_dir: str = "data/raw/parquet"):
@@ -23,7 +23,7 @@ class ParquetDownloader:
         """
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        logger.info(f"ParquetDownloader initialized. Output: {self.output_dir}")
+        logger.info(f"URLDownloader initialized. Output: {self.output_dir}")
     
     def download(
         self,
@@ -42,7 +42,7 @@ class ParquetDownloader:
             Path to downloaded file
             
         Example:
-            >>> downloader = ParquetDownloader()
+            >>> downloader = URLDownloader()
             >>> url = "https://eeadmz1batchservice02.blob.core.windows.net/airquality-p-e1a/PT/SPO-PT02022_00008_100.parquet"
             >>> filepath = downloader.download(url)
             >>> print(f"Downloaded: {filepath}")

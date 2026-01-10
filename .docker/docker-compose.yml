@@ -14,7 +14,7 @@ services:
       - TZ=Europe/Rome
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./postgres/backups:/backups
+      - postgres-backups:/backups
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     networks:
@@ -49,8 +49,8 @@ services:
       - DB_USER=discomap
       - DB_PASSWORD=${POSTGRES_PASSWORD:-changeme}
     volumes:
-      - app-data:/app/data
-      - app-logs:/app/logs
+      - api-data:/app/data
+      - api-logs:/app/logs
     ports:
       - "${API_PORT:-8000}:8000"
     networks:
@@ -123,14 +123,23 @@ networks:
     name: discomap-net
 
 volumes:
+  # PostgreSQL data
   postgres-data:
     name: discomap-postgres-data
+  postgres-backups:
+    name: discomap-postgres-backups
+  
+  # API data and logs
+  api-data:
+    name: discomap-api-data
+  api-logs:
+    name: discomap-api-logs
+  
+  # PgAdmin data
   pgadmin-data:
     name: discomap-pgadmin-data
+  
+  # Grafana data
   grafana-data:
     name: discomap-grafana-data
-  app-data:
-    name: discomap-app-data
-  app-logs:
-    name: discomap-app-logs
 

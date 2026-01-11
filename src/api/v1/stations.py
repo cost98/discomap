@@ -143,15 +143,18 @@ async def upload_stations_csv(file: UploadFile = File(...)):
                 }
             
             # Build sampling point data
-            if sampling_point_id not in sampling_points_data:
+            # Add country prefix to match Parquet format: ES/SP_35006001_14_6
+            prefixed_sp_id = f"{country_code}/{sampling_point_id}"
+            
+            if prefixed_sp_id not in sampling_points_data:
                 # Extract pollutant code from Air Pollutant column
                 pollutant_name = row.get("Air Pollutant", "").strip()
                 pollutant_code = pollutant_map.get(pollutant_name)
                 
                 if pollutant_code:
                     # Pollutant esiste nel DB, crea sampling point
-                    sampling_points_data[sampling_point_id] = {
-                        "sampling_point_id": sampling_point_id,
+                    sampling_points_data[prefixed_sp_id] = {
+                        "sampling_point_id": prefixed_sp_id,
                         "station_code": station_code,
                         "country_code": country_code,
                         "pollutant_code": pollutant_code,
@@ -166,7 +169,7 @@ async def upload_stations_csv(file: UploadFile = File(...)):
                     }
                 else:
                     # Pollutant non esiste nel DB, skippa sampling point
-                    errors.append(f"Row {row_num}: Pollutant '{pollutant_name}' not in DB - skipping {sampling_point_id}")
+                    errors.append(f"Row {row_num}: Pollutant '{pollutant_name}' not in DB - skipping {prefixed_sp_id}")
         
         except Exception as e:
             errors.append(f"Row {row_num}: {str(e)}")

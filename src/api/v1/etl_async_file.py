@@ -14,7 +14,7 @@ from src.services.etl.models import (
 )
 
 logger = get_logger(__name__)
-router = APIRouter(prefix="/async/file", tags=["ETL Async - File Jobs"])
+router = APIRouter(prefix="/async/file", tags=["\U0001F4E5 ETL - Files"])
 
 # Batch manager for file-based processing with controlled concurrency
 batch_manager = BatchManager(

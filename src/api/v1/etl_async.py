@@ -12,7 +12,7 @@ from src.logger import get_logger
 from src.services import ETLPipeline
 
 logger = get_logger(__name__)
-router = APIRouter(prefix="/async", tags=["ETL Async - URL Jobs"])
+router = APIRouter(prefix="/async", tags=["\U0001F4E5 ETL - Batch"])
 
 # In-memory job tracking (per produzione: Redis/Database)
 _jobs: dict[str, dict] = {}

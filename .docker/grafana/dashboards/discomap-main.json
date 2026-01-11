@@ -105,7 +105,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT\n  time_bucket('1 day', m.time) AS time,\n  p.pollutant_name || ' (' || sp.country_code || ')' as metric,\n  AVG(m.value) as value\nFROM airquality.measurements m\nJOIN airquality.sampling_points sp ON m.sampling_point_id = sp.sampling_point_id\nJOIN airquality.pollutants p ON sp.pollutant_code = p.pollutant_code\nWHERE \n  $__timeFilter(m.time)\n  AND sp.country_code = ANY(string_to_array('${country:csv}', ','))\n  AND sp.pollutant_code = ANY(ARRAY[${pollutant:csv}])\nGROUP BY time, p.pollutant_name, sp.country_code\nORDER BY time",
+          "rawSql": "SELECT\n  day AS time,\n  p.pollutant_name || ' (' || sp.country_code || ')' as metric,\n  avg_value as value\nFROM airquality.daily_measurements dm\nJOIN airquality.sampling_points sp ON dm.sampling_point_id = sp.sampling_point_id\nJOIN airquality.pollutants p ON sp.pollutant_code = p.pollutant_code\nWHERE \n  $__timeFilter(dm.day)\n  AND sp.country_code = ANY(string_to_array('${country:csv}', ','))\n  AND sp.pollutant_code = ANY(ARRAY[${pollutant:csv}])\nORDER BY day",
           "refId": "A",
           "sql": {
             "columns": [
@@ -126,7 +126,7 @@
           }
         }
       ],
-      "title": "📊 Pollutant Trends Over Time",
+      "title": "📊 Pollutant Trends Over Time (Valid Data Only)",
       "type": "timeseries"
     },
     {
@@ -196,7 +196,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT COUNT(*) as \"Total Measurements\"\nFROM airquality.measurements m\nJOIN airquality.sampling_points sp ON m.sampling_point_id = sp.sampling_point_id\nWHERE \n  $__timeFilter(m.time)\n  AND sp.country_code = ANY(string_to_array('${country:csv}', ','))\n  AND sp.pollutant_code = ANY(ARRAY[${pollutant:csv}])",
+          "rawSql": "SELECT COUNT(*) as \"Valid Measurements\"\nFROM airquality.measurements m\nJOIN airquality.sampling_points sp ON m.sampling_point_id = sp.sampling_point_id\nWHERE \n  $__timeFilter(m.time)\n  AND m.validity >= 1\n  AND sp.country_code = ANY(string_to_array('${country:csv}', ','))\n  AND sp.pollutant_code = ANY(ARRAY[${pollutant:csv}])",
           "refId": "A",
           "sql": {
             "columns": [
@@ -217,7 +217,7 @@
           }
         }
       ],
-      "title": "📈 Total Measurements",
+      "title": "📈 Valid Measurements",
       "type": "stat"
     },
     {
@@ -275,7 +275,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT COUNT(DISTINCT sp.station_code) as \"Active Stations\"\nFROM airquality.measurements m\nJOIN airquality.sampling_points sp ON m.sampling_point_id = sp.sampling_point_id\nWHERE \n  $__timeFilter(m.time)\n  AND sp.country_code = ANY(string_to_array('${country:csv}', ','))\n  AND sp.pollutant_code = ANY(ARRAY[${pollutant:csv}])",
+          "rawSql": "SELECT COUNT(DISTINCT sp.station_code) as \"Active Stations\"\nFROM airquality.measurements m\nJOIN airquality.sampling_points sp ON m.sampling_point_id = sp.sampling_point_id\nWHERE \n  $__timeFilter(m.time)\n  AND m.validity >= 1\n  AND sp.country_code = ANY(string_to_array('${country:csv}', ','))\n  AND sp.pollutant_code = ANY(ARRAY[${pollutant:csv}])",
           "refId": "A",
           "sql": {
             "columns": [
@@ -362,7 +362,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT AVG(m.value) as \"Average Value\"\nFROM airquality.measurements m\nJOIN airquality.sampling_points sp ON m.sampling_point_id = sp.sampling_point_id\nWHERE \n  $__timeFilter(m.time)\n  AND sp.country_code = ANY(string_to_array('${country:csv}', ','))\n  AND sp.pollutant_code = ANY(ARRAY[${pollutant:csv}])",
+          "rawSql": "SELECT ROUND(AVG(m.value)::numeric, 2) as \"Average Concentration\"\nFROM airquality.measurements m\nJOIN airquality.sampling_points sp ON m.sampling_point_id = sp.sampling_point_id\nWHERE \n  $__timeFilter(m.time)\n  AND m.validity >= 1\n  AND sp.country_code = ANY(string_to_array('${country:csv}', ','))\n  AND sp.pollutant_code = ANY(ARRAY[${pollutant:csv}])",
           "refId": "A",
           "sql": {
             "columns": [
@@ -449,7 +449,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT \n  ROUND(100.0 * COUNT(CASE WHEN m.validity IN (1,2,3) THEN 1 END) / NULLIF(COUNT(*), 0), 1) as \"Data Quality\"\nFROM airquality.measurements m\nJOIN airquality.sampling_points sp ON m.sampling_point_id = sp.sampling_point_id\nWHERE \n  $__timeFilter(m.time)\n  AND sp.country_code = ANY(string_to_array('${country:csv}', ','))\n  AND sp.pollutant_code = ANY(ARRAY[${pollutant:csv}])",
+          "rawSql": "SELECT \n  ROUND(100.0 * COUNT(CASE WHEN m.validity >= 1 THEN 1 END) / NULLIF(COUNT(*), 0), 1) as \"Data Quality\"\nFROM airquality.measurements m\nJOIN airquality.sampling_points sp ON m.sampling_point_id = sp.sampling_point_id\nWHERE \n  $__timeFilter(m.time)\n  AND sp.country_code = ANY(string_to_array('${country:csv}', ','))\n  AND sp.pollutant_code = ANY(ARRAY[${pollutant:csv}])",
           "refId": "A",
           "sql": {
             "columns": [
@@ -470,7 +470,7 @@
           }
         }
       ],
-      "title": "✅ Data Quality",
+      "title": "✅ Data Quality %",
       "type": "stat"
     },
     {
@@ -530,7 +530,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT \n  sp.country_code,\n  COUNT(*) as measurements\nFROM airquality.measurements m\nJOIN airquality.sampling_points sp ON m.sampling_point_id = sp.sampling_point_id\nWHERE \n  $__timeFilter(m.time)\n  AND sp.country_code = ANY(string_to_array('${country:csv}', ','))\n  AND sp.pollutant_code = ANY(ARRAY[${pollutant:csv}])\nGROUP BY sp.country_code\nORDER BY measurements DESC",
+          "rawSql": "SELECT \n  c.country_name as country_code,\n  COUNT(*) as measurements\nFROM airquality.measurements m\nJOIN airquality.sampling_points sp ON m.sampling_point_id = sp.sampling_point_id\nJOIN airquality.countries c ON sp.country_code = c.country_code\nWHERE \n  $__timeFilter(m.time)\n  AND m.validity >= 1\n  AND sp.country_code = ANY(string_to_array('${country:csv}', ','))\n  AND sp.pollutant_code = ANY(ARRAY[${pollutant:csv}])\nGROUP BY c.country_name\nORDER BY measurements DESC",
           "refId": "A",
           "sql": {
             "columns": [
@@ -551,7 +551,7 @@
           }
         }
       ],
-      "title": "🌍 Measurements by Country",
+      "title": "🌍 Valid Measurements by Country",
       "type": "piechart"
     },
     {
@@ -636,7 +636,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT \n  s.station_name,\n  COUNT(*) as measurements\nFROM airquality.measurements m\nJOIN airquality.sampling_points sp ON m.sampling_point_id = sp.sampling_point_id\nJOIN airquality.stations s ON sp.station_code = s.station_code\nWHERE \n  $__timeFilter(m.time)\n  AND sp.country_code = ANY(string_to_array('${country:csv}', ','))\n  AND sp.pollutant_code = ANY(ARRAY[${pollutant:csv}])\nGROUP BY s.station_name\nORDER BY measurements DESC\nLIMIT 15",
+          "rawSql": "SELECT \n  s.station_name,\n  COUNT(*) as measurements\nFROM airquality.measurements m\nJOIN airquality.sampling_points sp ON m.sampling_point_id = sp.sampling_point_id\nJOIN airquality.stations s ON sp.station_code = s.station_code\nWHERE \n  $__timeFilter(m.time)\n  AND m.validity >= 1\n  AND sp.country_code = ANY(string_to_array('${country:csv}', ','))\n  AND sp.pollutant_code = ANY(ARRAY[${pollutant:csv}])\nGROUP BY s.station_name\nORDER BY measurements DESC\nLIMIT 15",
           "refId": "A",
           "sql": {
             "columns": [
@@ -657,7 +657,7 @@
           }
         }
       ],
-      "title": "🏆 Top 15 Stations by Measurements",
+      "title": "🏆 Top 15 Stations (Valid Measurements)",
       "type": "barchart"
     },
     {
@@ -734,6 +734,44 @@
                 }
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "data_quality"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "percentage",
+                  "steps": [
+                    {
+                      "color": "red",
+                      "value": null
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 80
+                    },
+                    {
+                      "color": "green",
+                      "value": 95
+                    }
+                  ]
+                }
+              }
+            ]
           }
         ]
       },
@@ -770,7 +808,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT \n  s.station_code,\n  s.station_name,\n  sp.country_code,\n  p.pollutant_name,\n  ROUND(AVG(m.value)::numeric, 2) as avg_value,\n  ROUND(MAX(m.value)::numeric, 2) as max_value,\n  COUNT(*) as measurements,\n  MAX(m.time)::date as last_update\nFROM airquality.measurements m\nJOIN airquality.sampling_points sp ON m.sampling_point_id = sp.sampling_point_id\nJOIN airquality.stations s ON sp.station_code = s.station_code\nJOIN airquality.pollutants p ON sp.pollutant_code = p.pollutant_code\nWHERE \n  $__timeFilter(m.time)\n  AND sp.country_code = ANY(string_to_array('${country:csv}', ','))\n  AND sp.pollutant_code = ANY(ARRAY[${pollutant:csv}])\nGROUP BY s.station_code, s.station_name, sp.country_code, p.pollutant_name\nORDER BY avg_value DESC\nLIMIT 50",
+          "rawSql": "SELECT \n  s.station_code,\n  s.station_name,\n  sp.country_code,\n  p.pollutant_name,\n  ROUND(AVG(CASE WHEN m.validity >= 1 THEN m.value END)::numeric, 2) as avg_value,\n  ROUND(MAX(CASE WHEN m.validity >= 1 THEN m.value END)::numeric, 2) as max_value,\n  COUNT(CASE WHEN m.validity >= 1 THEN 1 END) as valid_measurements,\n  ROUND(100.0 * COUNT(CASE WHEN m.validity >= 1 THEN 1 END) / NULLIF(COUNT(*), 0), 1) as data_quality,\n  MAX(m.time)::date as last_update\nFROM airquality.measurements m\nJOIN airquality.sampling_points sp ON m.sampling_point_id = sp.sampling_point_id\nJOIN airquality.stations s ON sp.station_code = s.station_code\nJOIN airquality.pollutants p ON sp.pollutant_code = p.pollutant_code\nWHERE \n  $__timeFilter(m.time)\n  AND sp.country_code = ANY(string_to_array('${country:csv}', ','))\n  AND sp.pollutant_code = ANY(ARRAY[${pollutant:csv}])\nGROUP BY s.station_code, s.station_name, sp.country_code, p.pollutant_name\nHAVING COUNT(CASE WHEN m.validity >= 1 THEN 1 END) > 0\nORDER BY avg_value DESC\nLIMIT 50",
           "refId": "A",
           "sql": {
             "columns": [
@@ -791,7 +829,7 @@
           }
         }
       ],
-      "title": "📋 Station Statistics",
+      "title": "📋 Station Statistics (Valid Data + Quality %)",
       "type": "table"
     }
   ],
@@ -805,14 +843,14 @@
           "type": "postgres",
           "uid": "postgres-ds"
         },
-        "definition": "SELECT DISTINCT country_code FROM airquality.stations ORDER BY country_code",
+        "definition": "SELECT DISTINCT sp.country_code\nFROM airquality.sampling_points sp\nWHERE EXISTS (\n  SELECT 1 FROM airquality.measurements m \n  WHERE m.sampling_point_id = sp.sampling_point_id\n  AND m.validity >= 1\n)\nORDER BY sp.country_code",
         "hide": 0,
-        "includeAll": false,
+        "includeAll": true,
         "label": "Country",
         "multi": true,
         "name": "country",
         "options": [],
-        "query": "SELECT DISTINCT country_code FROM airquality.stations ORDER BY country_code",
+        "query": "SELECT DISTINCT sp.country_code\nFROM airquality.sampling_points sp\nWHERE EXISTS (\n  SELECT 1 FROM airquality.measurements m \n  WHERE m.sampling_point_id = sp.sampling_point_id\n  AND m.validity >= 1\n)\nORDER BY sp.country_code",
         "refresh": 1,
         "regex": "",
         "skipUrlSync": false,
@@ -825,14 +863,14 @@
           "type": "postgres",
           "uid": "postgres-ds"
         },
-        "definition": "SELECT pollutant_code AS __value, pollutant_name AS __text FROM airquality.pollutants ORDER BY pollutant_name",
+        "definition": "SELECT DISTINCT sp.pollutant_code AS __value, p.pollutant_name AS __text\nFROM airquality.sampling_points sp\nJOIN airquality.pollutants p ON sp.pollutant_code = p.pollutant_code\nWHERE EXISTS (\n  SELECT 1 FROM airquality.measurements m \n  WHERE m.sampling_point_id = sp.sampling_point_id\n  AND m.validity >= 1\n)\nORDER BY p.pollutant_name",
         "hide": 0,
-        "includeAll": false,
+        "includeAll": true,
         "label": "Pollutant",
         "multi": true,
         "name": "pollutant",
         "options": [],
-        "query": "SELECT pollutant_code AS __value, pollutant_name AS __text FROM airquality.pollutants ORDER BY pollutant_name",
+        "query": "SELECT DISTINCT sp.pollutant_code AS __value, p.pollutant_name AS __text\nFROM airquality.sampling_points sp\nJOIN airquality.pollutants p ON sp.pollutant_code = p.pollutant_code\nWHERE EXISTS (\n  SELECT 1 FROM airquality.measurements m \n  WHERE m.sampling_point_id = sp.sampling_point_id\n  AND m.validity >= 1\n)\nORDER BY p.pollutant_name",
         "refresh": 1,
         "regex": "",
         "skipUrlSync": false,

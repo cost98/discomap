@@ -119,6 +119,8 @@ def upgrade() -> None:
     op.create_index('idx_sampling_points_country', 'sampling_points', ['country_code'], schema='airquality')
     op.create_index('idx_sampling_points_pollutant', 'sampling_points', ['pollutant_code'], schema='airquality')
     op.create_index('idx_sampling_points_station', 'sampling_points', ['station_code'], schema='airquality')
+    # Composite index for filter queries (country + pollutant)
+    op.create_index('idx_sampling_points_country_pollutant', 'sampling_points', ['country_code', 'pollutant_code'], schema='airquality')
     
     # Create measurements table (will be converted to hypertable)
     op.create_table(
@@ -142,6 +144,20 @@ def upgrade() -> None:
     )
     op.create_index('idx_measurements_pollutant', 'measurements', ['pollutant_code', 'time'], schema='airquality')
     op.create_index('idx_measurements_sampling_point', 'measurements', ['sampling_point_id', 'time'], schema='airquality')
+    
+    # Create partial index for valid measurements (validity >= 1)
+    op.execute("""
+        CREATE INDEX idx_measurements_validity 
+        ON airquality.measurements(validity) 
+        WHERE validity >= 1
+    """)
+    
+    # Create composite index for queries filtering by sampling_point, validity and time
+    op.execute("""
+        CREATE INDEX idx_measurements_sp_validity_time 
+        ON airquality.measurements(sampling_point_id, validity, time DESC) 
+        WHERE validity >= 1
+    """)
     
     # Convert measurements to TimescaleDB hypertable
     op.execute("""
@@ -213,10 +229,13 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Drop all tables."""
+    op.drop_index('idx_measurements_sp_validity_time', table_name='measurements', schema='airquality')
+    op.drop_index('idx_measurements_validity', table_name='measurements', schema='airquality')
     op.drop_index('idx_measurements_sampling_point', table_name='measurements', schema='airquality')
     op.drop_index('idx_measurements_pollutant', table_name='measurements', schema='airquality')
     op.drop_table('measurements', schema='airquality')
     
+    op.drop_index('idx_sampling_points_country_pollutant', table_name='sampling_points', schema='airquality')
     op.drop_index('idx_sampling_points_station', table_name='sampling_points', schema='airquality')
     op.drop_index('idx_sampling_points_pollutant', table_name='sampling_points', schema='airquality')
     op.drop_index('idx_sampling_points_country', table_name='sampling_points', schema='airquality')

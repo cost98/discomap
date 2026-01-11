@@ -25,6 +25,7 @@ def upgrade() -> None:
     op.execute("SET search_path TO airquality, public")
     
     # Create continuous aggregate materialized view
+    # Only includes valid measurements (validity >= 1)
     op.execute("""
         CREATE MATERIALIZED VIEW airquality.daily_measurements
         WITH (timescaledb.continuous) AS
@@ -36,19 +37,20 @@ def upgrade() -> None:
             MIN(value) as min_value,
             MAX(value) as max_value,
             STDDEV(value) as stddev_value,
-            COUNT(*) as num_measurements,
+            COUNT(*) as count,
             MIN(time) as first_measurement,
             MAX(time) as last_measurement
         FROM airquality.measurements
+        WHERE validity >= 1
         GROUP BY day, sampling_point_id, pollutant_code
         WITH NO DATA
     """)
     
-    # Add refresh policy (refresh every 1 hour, keep 7 days lag)
+    # Add refresh policy (refresh every 1 hour, process recent 30 days)
     op.execute("""
         SELECT add_continuous_aggregate_policy('airquality.daily_measurements',
-            start_offset => INTERVAL '7 days',
-            end_offset => INTERVAL '1 hour',
+            start_offset => INTERVAL '30 days',
+            end_offset => INTERVAL '1 day',
             schedule_interval => INTERVAL '1 hour'
         )
     """)

@@ -8,7 +8,7 @@ from src.logger import get_logger
 from src.services import ETLPipeline
 
 logger = get_logger(__name__)
-router = APIRouter(prefix="/sync", tags=["ETL Sync"])
+router = APIRouter(prefix="/sync", tags=["\U0001F4E5 ETL - Sync"])
 
 
 class ETLRequest(BaseModel):

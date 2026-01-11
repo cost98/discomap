@@ -13,7 +13,7 @@ from src.database.engine import get_db_session
 from src.database.repositories import CountryRepository, PollutantRepository, StationRepository, SamplingPointRepository
 
 logger = get_logger(__name__)
-router = APIRouter(prefix="/stations", tags=["Stations Metadata"])
+router = APIRouter(prefix="/stations", tags=["\U0001F4CD Metadata"])
 
 
 class CSVUploadResponse(BaseModel):

@@ -17,6 +17,34 @@ from src.logger import get_logger
 # Setup logging
 logger = get_logger(__name__)
 
+# OpenAPI tags metadata for Swagger organization
+tags_metadata = [
+    {
+        "name": "\U0001F4CD Metadata",
+        "description": "Reference data and metadata - stations, sampling points, countries, pollutants",
+    },
+    {
+        "name": "\U0001F4E5 ETL - Sync",
+        "description": "Synchronous ETL operations - immediate response, best for small datasets",
+    },
+    {
+        "name": "\U0001F4E5 ETL - Batch",
+        "description": "Asynchronous batch ETL from Parquet URLs - background processing for large datasets",
+    },
+    {
+        "name": "\U0001F4E5 ETL - Files",
+        "description": "Asynchronous ETL from uploaded Parquet files",
+    },
+    {
+        "name": "\U0001F527 Database Optimization",
+        "description": "Continuous aggregates management and chunk compression for performance and storage optimization",
+    },
+    {
+        "name": "\U00002699\U0000FE0F System",
+        "description": "API health checks, database statistics, and system monitoring",
+    },
+]
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -43,11 +71,26 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="DiscoMap API",
-    description="EEA Air Quality Data ETL Pipeline & Monitoring",
+    description="🌍 **EEA Air Quality Data Platform**\n\n"
+                "Time-series database and ETL pipeline for European air quality measurements.\n\n"
+                "**Features:**\n"
+                "- 📥 Batch ETL from Parquet files (sync/async)\n"
+                "- 📊 Pre-aggregated daily statistics\n"
+                "- 🗄️ TimescaleDB hypertable storage\n"
+                "- 🔍 Station metadata and sampling points\n"
+                "- ⚡ Continuous aggregates for fast queries",
     version="1.0.0",
+    openapi_tags=tags_metadata,
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc",
+    contact={
+        "name": "DiscoMap Team",
+        "url": "https://github.com/cost98/discomap",
+    },
+    license_info={
+        "name": "MIT",
+    },
 )
 
 # Include API v1 router

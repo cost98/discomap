@@ -1,6 +1,9 @@
 services:
-  # PostgreSQL with TimescaleDB - Use pre-built image from GHCR
+  # PostgreSQL with TimescaleDB - Build locally (or use pre-built image from GHCR)
   postgres:
+    build:
+      context: ..
+      dockerfile: .docker/Dockerfile.postgres
     image: ghcr.io/cost98/discomap-postgres:latest
     container_name: discomap-postgres
     restart: unless-stopped
@@ -27,8 +30,11 @@ services:
       - "com.discomap.service=database"
       - "com.discomap.version=1.0.0"
 
-  # API Server - Use pre-built image from GHCR
+  # API Server - Build locally (or use pre-built image from GHCR)
   api:
+    build:
+      context: ..
+      dockerfile: .docker/Dockerfile.api
     image: ghcr.io/cost98/discomap-api:latest
     container_name: discomap-api
     restart: unless-stopped

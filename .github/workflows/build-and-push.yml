@@ -61,7 +61,7 @@ jobs:
         with:
           context: .
           file: ./.docker/Dockerfile.api
-          push: false
+          push: true
           tags: ${{ steps.meta-api.outputs.tags }}
           labels: ${{ steps.meta-api.outputs.labels }}
 
@@ -70,7 +70,7 @@ jobs:
         with:
           context: .
           file: ./.docker/Dockerfile.postgres
-          push: false
+          push: true
           tags: ${{ steps.meta-postgres.outputs.tags }}
           labels: ${{ steps.meta-postgres.outputs.labels }}
 

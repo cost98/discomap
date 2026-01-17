@@ -189,37 +189,41 @@ async def upload_stations_csv(file: UploadFile = File(...)):
         
         # 1. First insert/update stations
         for station_code, data in stations_data.items():
-            try:
-                existing = await station_repo.get_by_code(station_code)
+            # Use savepoint to isolate each insert
+            async with session.begin_nested():
+                try:
+                    existing = await station_repo.get_by_code(station_code)
+                    await station_repo.create_or_update(data)
+                    
+                    if existing:
+                        stations_updated += 1
+                    else:
+                        stations_created += 1
                 
-                if existing:
-                    await station_repo.create_or_update(data)
-                    stations_updated += 1
-                else:
-                    await station_repo.create_or_update(data)
-                    stations_created += 1
-            
-            except Exception as e:
-                errors.append(f"Station {station_code}: {str(e)}")
-                logger.error(f"Error inserting station {station_code}: {e}")
+                except Exception as e:
+                    errors.append(f"Station {station_code}: {str(e)}")
+                    logger.error(f"Error inserting station {station_code}: {e}")
+                    await session.rollback()  # Rollback to savepoint
         
         await session.flush()  # Ensure stations exist
         
         # 2. Insert/update sampling points (pollutants già esistono nel DB)
         for sp_id, data in sampling_points_data.items():
-            try:
-                existing = await sp_repo.get_by_id(sp_id)
+            # Use savepoint to isolate each insert
+            async with session.begin_nested():
+                try:
+                    existing = await sp_repo.get_by_id(sp_id)
+                    await sp_repo.create_or_update(data)
+                    
+                    if existing:
+                        sp_updated += 1
+                    else:
+                        sp_created += 1
                 
-                if existing:
-                    await sp_repo.create_or_update(data)
-                    sp_updated += 1
-                else:
-                    await sp_repo.create_or_update(data)
-                    sp_created += 1
-            
-            except Exception as e:
-                errors.append(f"Sampling Point {sp_id}: {str(e)}")
-                logger.error(f"Error inserting sampling point {sp_id}: {e}")
+                except Exception as e:
+                    errors.append(f"Sampling Point {sp_id}: {str(e)}")
+                    logger.error(f"Error inserting sampling point {sp_id}: {e}")
+                    await session.rollback()  # Rollback to savepoint
         
         await session.commit()
     

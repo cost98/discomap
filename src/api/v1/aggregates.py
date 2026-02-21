@@ -82,6 +82,23 @@ class RefreshResponse(BaseModel):
     }
 
 
+class TruncateResponse(BaseModel):
+    """Truncate operation response."""
+    message: str
+    view_name: str
+    rows_deleted: int
+    
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "message": "Continuous aggregate truncated successfully",
+                "view_name": "daily_measurements",
+                "rows_deleted": 21309368
+            }
+        }
+    }
+
+
 @router.get("/status", response_model=AggregateStatusResponse)
 async def get_aggregate_status():
     """
@@ -197,4 +214,49 @@ async def refresh_aggregate(background_tasks: BackgroundTasks, request: RefreshR
         
     except Exception as e:
         logger.error(f"Error queuing aggregate refresh: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/truncate", response_model=TruncateResponse)
+async def truncate_aggregate():
+    """
+    Truncate (empty) the daily_measurements continuous aggregate.
+    
+    ⚠️ WARNING: This will delete all aggregated data. The view will be repopulated 
+    automatically by the refresh policy (every hour) or you can trigger a manual 
+    refresh using POST /aggregates/refresh.
+    
+    Use cases:
+    - Clear corrupted aggregate data
+    - Reset after fixing data quality issues
+    - Free up space before full recalculation
+    
+    Returns:
+        Confirmation with number of rows deleted
+    """
+    try:
+        engine = get_engine()
+        
+        async with engine.begin() as conn:
+            # Get current row count before truncating
+            count_result = await conn.execute(text("""
+                SELECT COUNT(*) FROM airquality.daily_measurements
+            """))
+            rows_before = count_result.scalar() or 0
+            
+            # Truncate the continuous aggregate
+            await conn.execute(text("""
+                TRUNCATE airquality.daily_measurements
+            """))
+            
+            logger.warning(f"⚠️ Truncated daily_measurements continuous aggregate ({rows_before:,} rows deleted)")
+            
+            return TruncateResponse(
+                message=f"Continuous aggregate truncated successfully. {rows_before:,} rows deleted. Use POST /aggregates/refresh to repopulate.",
+                view_name="daily_measurements",
+                rows_deleted=rows_before
+            )
+            
+    except Exception as e:
+        logger.error(f"Error truncating aggregate: {e}")
         raise HTTPException(status_code=500, detail=str(e))

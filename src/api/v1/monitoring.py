@@ -236,7 +236,7 @@ async def get_database_stats() -> DatabaseSizeResponse:
             db_size_result = await conn.execute(text("""
                 SELECT pg_database_size(current_database())
             """))
-            total_size_bytes = db_size_result.scalar()
+            total_size_bytes = int(db_size_result.scalar())
             
             # Get measurements table size including TimescaleDB chunks
             table_size_result = await conn.execute(text("""
@@ -255,10 +255,15 @@ async def get_database_stats() -> DatabaseSizeResponse:
             """))
             table_stats = table_size_result.fetchone()
             
+            # Convert to int to avoid Decimal issues
+            total_size = int(table_stats[0]) if table_stats[0] else 0
+            table_size = int(table_stats[1]) if table_stats[1] else 0
+            indexes_size = int(table_stats[2]) if table_stats[2] else 0
+            
             # Try to get compression stats from TimescaleDB (if compression is enabled)
             # Default to no compression
-            uncompressed_bytes = table_stats[1]
-            compressed_bytes = table_stats[1]
+            uncompressed_bytes = table_size
+            compressed_bytes = table_size
             compression_ratio = 1.0
             
             try:
@@ -277,9 +282,9 @@ async def get_database_stats() -> DatabaseSizeResponse:
                 compression_stats = compression_result.fetchone()
                 
                 if compression_stats and compression_stats[0] and compression_stats[1]:
-                    uncompressed_bytes = compression_stats[0]
-                    compressed_bytes = compression_stats[1]
-                    compression_ratio = compression_stats[2] if compression_stats[2] else 1.0
+                    uncompressed_bytes = int(compression_stats[0])
+                    compressed_bytes = int(compression_stats[1])
+                    compression_ratio = float(compression_stats[2]) if compression_stats[2] else 1.0
             except Exception:
                 # Compression not enabled or stats not available - use defaults
                 pass
@@ -290,10 +295,10 @@ async def get_database_stats() -> DatabaseSizeResponse:
             return DatabaseSizeResponse(
                 total_database_size=_format_bytes(total_size_bytes),
                 total_database_size_bytes=total_size_bytes,
-                measurements_table_size=_format_bytes(table_stats[1]),
-                measurements_table_size_bytes=table_stats[1],
-                measurements_indexes_size=_format_bytes(table_stats[2]),
-                measurements_total_size=_format_bytes(table_stats[0]),
+                measurements_table_size=_format_bytes(table_size),
+                measurements_table_size_bytes=table_size,
+                measurements_indexes_size=_format_bytes(indexes_size),
+                measurements_total_size=_format_bytes(total_size),
                 compression_enabled=compression_ratio > 1.0,
                 uncompressed_size=_format_bytes(uncompressed_bytes),
                 compressed_size=_format_bytes(compressed_bytes),

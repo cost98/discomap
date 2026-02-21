@@ -24,7 +24,10 @@ class ETLResponse(BaseModel):
 
 
 @router.post("/run", response_model=ETLResponse)
-async def run_etl(request: ETLRequest):
+async def run_etl(
+    request: ETLRequest,
+    upsert: bool = False,
+):
     """
     Run ETL pipeline from single Parquet URL (SYNCHRONOUS).
     
@@ -51,9 +54,9 @@ async def run_etl(request: ETLRequest):
         ```
     """
     try:
-        logger.info(f"📥 ETL request: {request.url}")
+        logger.info(f"📥 ETL request: {request.url} (upsert={upsert})")
         
-        pipeline = ETLPipeline()
+        pipeline = ETLPipeline(upsert_mode=upsert)
         stats = await pipeline.run_from_url(request.url)
         
         logger.info(f"✅ ETL completed: {stats}")

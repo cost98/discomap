@@ -31,6 +31,7 @@ class BatchJob:
     """Information about a single batch job."""
     job_id: str
     urls: List[str]
+    upsert: bool = False
     status: JobStatus = JobStatus.PENDING
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
@@ -138,7 +139,7 @@ class BatchManager:
             f"batch_size={batch_size}, etl_batch_size={etl_batch_size}"
         )
 
-    async def submit_file(self, urls: List[str]) -> MasterJob:
+    async def submit_file(self, urls: List[str], upsert: bool = False) -> MasterJob:
         """
         Submit a list of URLs for processing.
         
@@ -146,6 +147,7 @@ class BatchManager:
         
         Args:
             urls: List of Parquet URLs to process
+            upsert: Use bulk_upsert instead of bulk_copy
             
         Returns:
             MasterJob with tracking information
@@ -159,6 +161,7 @@ class BatchManager:
             batch_job = BatchJob(
                 job_id=str(uuid.uuid4()),
                 urls=batch_urls,
+                upsert=upsert,
             )
             batches.append(batch_job)
         
@@ -224,6 +227,7 @@ class BatchManager:
                 batch_size=self.etl_batch_size,
                 max_concurrent_files=3,  # Optimal from testing
                 cleanup_after_processing=True,
+                upsert_mode=batch.upsert,
             )
             
             # Process all URLs in this batch

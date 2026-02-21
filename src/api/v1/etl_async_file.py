@@ -25,7 +25,10 @@ batch_manager = BatchManager(
 
 
 @router.post("", response_model=FileUploadResponse)
-async def upload_url_file(file: UploadFile = File(...)):
+async def upload_url_file(
+    file: UploadFile = File(...),
+    upsert: bool = False,
+):
     """
     Upload a text file containing URLs for batch processing with SAFE concurrency control.
     
@@ -61,10 +64,10 @@ async def upload_url_file(file: UploadFile = File(...)):
         if not urls:
             raise HTTPException(status_code=400, detail="No valid URLs found in file")
         
-        logger.info(f"📁 File uploaded: {file.filename} - {len(urls)} URLs")
+        logger.info(f"📁 File uploaded: {file.filename} - {len(urls)} URLs (upsert={upsert})")
         
         # Submit to batch manager
-        master_job = await batch_manager.submit_file(urls)
+        master_job = await batch_manager.submit_file(urls, upsert=upsert)
         
         # Estimate duration (based on 143s for 50 URLs with max_concurrent=3)
         # With 3 concurrent batches, we can process ~3*50=150 URLs in 143s

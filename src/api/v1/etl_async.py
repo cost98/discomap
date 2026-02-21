@@ -64,7 +64,10 @@ class BatchJobStatus(BaseModel):
 
 
 @router.post("/batch", response_model=BatchETLResponse, status_code=202)
-async def run_batch_etl(request: BatchETLRequest):
+async def run_batch_etl(
+    request: BatchETLRequest,
+    upsert: bool = False,
+):
     """
     Run ETL pipeline for multiple URLs (ASYNCHRONOUS).
     
@@ -107,11 +110,12 @@ async def run_batch_etl(request: BatchETLRequest):
         "completed_at": None,
         "stats": [],
         "errors": [],
+        "upsert": upsert,
     }
     
     # Start background task
     asyncio.create_task(
-        _process_batch_job(job_id, request.urls)
+        _process_batch_job(job_id, request.urls, upsert)
     )
     
     logger.info(f"📦 Batch job {job_id} created: {len(request.urls)} URLs")
@@ -163,6 +167,7 @@ async def get_batch_status(job_id: str):
 async def _process_batch_job(
     job_id: str,
     urls: list[str],
+    upsert: bool = False,
 ):
     """
     Background task to process batch ETL job.
@@ -170,14 +175,15 @@ async def _process_batch_job(
     Args:
         job_id: Unique job identifier
         urls: List of Parquet URLs to process
+        upsert: Use bulk_upsert instead of bulk_copy
     """
     job = _jobs[job_id]
     job["status"] = JobStatus.RUNNING
     job["started_at"] = datetime.now()
     
-    logger.info(f"🚀 Starting batch job {job_id}: {len(urls)} URLs")
+    logger.info(f"🚀 Starting batch job {job_id}: {len(urls)} URLs (upsert={upsert})")
     
-    pipeline = ETLPipeline()
+    pipeline = ETLPipeline(upsert_mode=upsert)
     
     for i, url in enumerate(urls, 1):
         try:

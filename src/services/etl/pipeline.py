@@ -39,6 +39,7 @@ class ETLPipeline:
         batch_size: int = 50000,
         cleanup_after_processing: bool = True,
         max_concurrent_files: int = 3,
+        upsert_mode: bool = False,
     ):
         """
         Initialize ETL pipeline.
@@ -48,14 +49,16 @@ class ETLPipeline:
             batch_size: Batch size for measurement inserts (default 50000 - COPY scala bene)
             cleanup_after_processing: Delete files after successful processing
             max_concurrent_files: Max files to process in parallel (default 3)
+            upsert_mode: Use bulk_upsert instead of bulk_copy (default False = veloce, True = gestisce duplicati)
         """
         self.downloader = URLDownloader(output_dir=output_dir)
         self.parser = ParquetParser()
         self.batch_size = batch_size
         self.cleanup_after_processing = cleanup_after_processing
         self.max_concurrent_files = max_concurrent_files
+        self.upsert_mode = upsert_mode
         
-        logger.info(f"ETL Pipeline initialized - batch_size={batch_size}, cleanup={cleanup_after_processing}")
+        logger.info(f"ETL Pipeline initialized - batch_size={batch_size}, cleanup={cleanup_after_processing}, upsert={upsert_mode}")
 
     async def process_parquet_file(
         self,
@@ -255,8 +258,12 @@ class ETLPipeline:
                 batch = measurements[i : i + self.batch_size]
                 batch_num = i // self.batch_size + 1
                 try:
-                    # Usa PostgreSQL COPY per 5-10x speedup
-                    count = await meas_repo.bulk_copy(batch)
+                    # Scegli metodo in base a upsert_mode
+                    if self.upsert_mode:
+                        count = await meas_repo.bulk_upsert(batch)  # Gestisce duplicati
+                    else:
+                        count = await meas_repo.bulk_copy(batch)  # Veloce, no duplicati
+                    
                     stats["measurements"] += count
                     progress = (stats["measurements"] / len(measurements)) * 100
                     logger.debug(f"  Batch {batch_num}/{total_batches}: +{count} measurements ({progress:.1f}%)")

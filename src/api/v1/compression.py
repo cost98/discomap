@@ -111,7 +111,7 @@ async def get_compression_status():
         async with engine.connect() as conn:
             # Check if compression is enabled
             compression_check = await conn.execute(text("""
-                SELECT compression_state 
+                SELECT compression_enabled 
                 FROM timescaledb_information.hypertables 
                 WHERE hypertable_name = 'measurements'
             """))

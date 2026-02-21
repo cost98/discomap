@@ -70,22 +70,36 @@ class DataQualityResponse(BaseModel):
     }
 
 
-class ValidityFlagResponse(BaseModel):
-    """Validity flag details."""
-    validity_code: int
-    validity_name: str
-    description: str
-    count: int
-    percentage: float
+class DatabaseSizeResponse(BaseModel):
+    """Database size and compression statistics."""
+    total_database_size: str
+    total_database_size_bytes: int
+    measurements_table_size: str
+    measurements_table_size_bytes: int
+    measurements_indexes_size: str
+    measurements_total_size: str
+    compression_enabled: bool
+    uncompressed_size: str
+    compressed_size: str
+    compression_ratio: float
+    space_saved: str
+    space_saved_percentage: float
     
     model_config = {
         "json_schema_extra": {
             "example": {
-                "validity_code": 1,
-                "validity_name": "Valid",
-                "description": "Valid measurement",
-                "count": 388419262,
-                "percentage": 90.82
+                "total_database_size": "2.5 GB",
+                "total_database_size_bytes": 2684354560,
+                "measurements_table_size": "1.8 GB",
+                "measurements_table_size_bytes": 1932735283,
+                "measurements_indexes_size": "450 MB",
+                "measurements_total_size": "2.2 GB",
+                "compression_enabled": True,
+                "uncompressed_size": "5.4 GB",
+                "compressed_size": "1.8 GB",
+                "compression_ratio": 3.0,
+                "space_saved": "3.6 GB",
+                "space_saved_percentage": 66.67
             }
         }
     }
@@ -207,45 +221,88 @@ async def get_data_quality() -> DataQualityResponse:
 
 
 @router.get(
-    "/data-quality/by-validity",
-    response_model=list[ValidityFlagResponse],
-    summary="Get data quality breakdown by validity flag",
-    description="Returns detailed statistics for each validity flag with descriptions"
+    "/stats/database",
+    response_model=DatabaseSizeResponse,
+    summary="Get database storage statistics",
+    description="Returns database size, compression ratio, and space savings from TimescaleDB compression"
 )
-async def get_data_quality_by_validity() -> list[ValidityFlagResponse]:
-    """Get data quality breakdown by validity flag."""
+async def get_database_stats() -> DatabaseSizeResponse:
+    """Get database size and compression statistics."""
     try:
         engine = get_engine()
         
         async with engine.connect() as conn:
-            # Get total count for percentage calculation
-            total_result = await conn.execute(text("SELECT COUNT(*) FROM airquality.measurements"))
-            total_count = total_result.scalar()
-            
-            # Get counts by validity with flag details
-            result = await conn.execute(text("""
-                SELECT 
-                    vf.validity_code,
-                    vf.validity_name,
-                    vf.description,
-                    COUNT(m.validity) as count
-                FROM airquality.validity_flags vf
-                LEFT JOIN airquality.measurements m ON m.validity = vf.validity_code
-                GROUP BY vf.validity_code, vf.validity_name, vf.description
-                ORDER BY count DESC
+            # Get total database size
+            db_size_result = await conn.execute(text("""
+                SELECT pg_database_size(current_database())
             """))
+            total_size_bytes = db_size_result.scalar()
             
-            return [
-                ValidityFlagResponse(
-                    validity_code=row[0],
-                    validity_name=row[1],
-                    description=row[2],
-                    count=row[3],
-                    percentage=round((row[3] / total_count * 100), 2) if total_count > 0 else 0
-                )
-                for row in result.fetchall()
-            ]
+            # Get measurements table size (before compression)
+            table_size_result = await conn.execute(text("""
+                SELECT 
+                    pg_total_relation_size('airquality.measurements') as total_size,
+                    pg_relation_size('airquality.measurements') as table_size,
+                    pg_total_relation_size('airquality.measurements') - pg_relation_size('airquality.measurements') as indexes_size
+            """))
+            table_stats = table_size_result.fetchone()
+            
+            # Try to get compression stats from TimescaleDB (if compression is enabled)
+            # Default to no compression
+            uncompressed_bytes = table_stats[1]
+            compressed_bytes = table_stats[1]
+            compression_ratio = 1.0
+            
+            try:
+                compression_result = await conn.execute(text("""
+                    SELECT 
+                        COALESCE(SUM(before_compression_total_bytes), 0) as uncompressed_bytes,
+                        COALESCE(SUM(after_compression_total_bytes), 0) as compressed_bytes,
+                        CASE 
+                            WHEN SUM(after_compression_total_bytes) > 0 
+                            THEN SUM(before_compression_total_bytes)::float / SUM(after_compression_total_bytes)::float
+                            ELSE 0
+                        END as compression_ratio
+                    FROM timescaledb_information.compressed_chunk_stats
+                    WHERE hypertable_name = 'measurements'
+                """))
+                compression_stats = compression_result.fetchone()
+                
+                if compression_stats and compression_stats[0] and compression_stats[1]:
+                    uncompressed_bytes = compression_stats[0]
+                    compressed_bytes = compression_stats[1]
+                    compression_ratio = compression_stats[2] if compression_stats[2] else 1.0
+            except Exception:
+                # Compression not enabled or stats not available - use defaults
+                pass
+            
+            space_saved_bytes = uncompressed_bytes - compressed_bytes
+            space_saved_pct = (space_saved_bytes / uncompressed_bytes * 100) if uncompressed_bytes > 0 else 0
+            
+            return DatabaseSizeResponse(
+                total_database_size=_format_bytes(total_size_bytes),
+                total_database_size_bytes=total_size_bytes,
+                measurements_table_size=_format_bytes(table_stats[1]),
+                measurements_table_size_bytes=table_stats[1],
+                measurements_indexes_size=_format_bytes(table_stats[2]),
+                measurements_total_size=_format_bytes(table_stats[0]),
+                compression_enabled=compression_ratio > 1.0,
+                uncompressed_size=_format_bytes(uncompressed_bytes),
+                compressed_size=_format_bytes(compressed_bytes),
+                compression_ratio=round(compression_ratio, 2),
+                space_saved=_format_bytes(space_saved_bytes),
+                space_saved_percentage=round(space_saved_pct, 2)
+            )
             
     except Exception as e:
-        logger.error(f"Error getting validity breakdown: {e}")
+        logger.error(f"Error getting database statistics: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+def _format_bytes(bytes_value: int) -> str:
+    """Format bytes to human-readable format."""
+    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+        if bytes_value < 1024.0:
+            return f"{bytes_value:.1f} {unit}"
+        bytes_value /= 1024.0
+    return f"{bytes_value:.1f} PB"

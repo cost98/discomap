@@ -169,6 +169,16 @@ def upgrade() -> None:
         )
     """)
     
+    # Enable compression on measurements hypertable
+    # This allows compressing older chunks to save ~90% disk space
+    op.execute("""
+        ALTER TABLE airquality.measurements SET (
+            timescaledb.compress,
+            timescaledb.compress_segmentby = 'sampling_point_id',
+            timescaledb.compress_orderby = 'time DESC, pollutant_code'
+        )
+    """)
+    
     # Insert lookup data - Countries
     op.execute("""
         INSERT INTO airquality.countries (country_code, country_name, region) VALUES

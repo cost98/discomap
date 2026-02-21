@@ -147,7 +147,20 @@ async def compress_chunks_background(older_than_days: int):
         
         engine = get_engine()
         
-        # First, get list of chunks to compress
+        # First, check if compression is enabled
+        async with engine.connect() as conn:
+            compression_check = await conn.execute(text("""
+                SELECT compression_enabled 
+                FROM timescaledb_information.hypertables 
+                WHERE hypertable_name = 'measurements'
+            """))
+            compression_enabled = compression_check.scalar()
+            
+            if not compression_enabled:
+                logger.error("❌ Compression is not enabled on measurements table. Enable it first using POST /compression/enable")
+                return
+        
+        # Get list of chunks to compress
         async with engine.begin() as conn:
             result = await conn.execute(text(f"""
                 SELECT i::text as chunk_name
@@ -157,6 +170,10 @@ async def compress_chunks_background(older_than_days: int):
         
         total_chunks = len(chunk_names)
         logger.info(f"📦 Found {total_chunks} chunks to compress")
+        
+        if total_chunks == 0:
+            logger.info("ℹ️ No chunks found to compress")
+            return
         
         # Compress chunks one by one to show progress
         compressed_count = 0

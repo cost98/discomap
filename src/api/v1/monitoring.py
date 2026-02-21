@@ -238,12 +238,20 @@ async def get_database_stats() -> DatabaseSizeResponse:
             """))
             total_size_bytes = db_size_result.scalar()
             
-            # Get measurements table size (before compression)
+            # Get measurements table size including TimescaleDB chunks
             table_size_result = await conn.execute(text("""
+                WITH chunk_stats AS (
+                    SELECT 
+                        COALESCE(SUM(pg_total_relation_size(format('%I.%I', chunk_schema, chunk_name))), 0) as total_chunks_size,
+                        COALESCE(SUM(pg_relation_size(format('%I.%I', chunk_schema, chunk_name))), 0) as chunks_table_size
+                    FROM timescaledb_information.chunks
+                    WHERE hypertable_name = 'measurements' AND hypertable_schema = 'airquality'
+                )
                 SELECT 
-                    pg_total_relation_size('airquality.measurements') as total_size,
-                    pg_relation_size('airquality.measurements') as table_size,
-                    pg_total_relation_size('airquality.measurements') - pg_relation_size('airquality.measurements') as indexes_size
+                    (SELECT total_chunks_size FROM chunk_stats) + 
+                    pg_indexes_size('airquality.measurements') as total_size,
+                    (SELECT chunks_table_size FROM chunk_stats) as table_size,
+                    pg_indexes_size('airquality.measurements') as indexes_size
             """))
             table_stats = table_size_result.fetchone()
             

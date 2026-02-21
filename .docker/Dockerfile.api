@@ -1,13 +1,24 @@
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 WORKDIR /app
 
 # Install PostgreSQL client for healthcheck
 RUN apt-get update && apt-get install -y postgresql-client && rm -rf /var/lib/apt/lists/*
 
-# Install dependencies
-COPY .docker/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Install Poetry
+RUN pip install --no-cache-dir poetry==1.7.1
+
+# Copy dependency files
+COPY pyproject.toml poetry.lock* ./
+
+# Install binary packages first (ensures wheel usage)
+RUN pip install --no-cache-dir pyarrow==17.0.0 asyncpg==0.29.0
+
+# Export and install remaining dependencies
+RUN poetry export -f requirements.txt --output requirements.txt --without-hashes --only main \
+    && grep -v "pyarrow\|asyncpg" requirements.txt > requirements_filtered.txt \
+    && pip install --no-cache-dir -r requirements_filtered.txt \
+    && rm requirements.txt requirements_filtered.txt
 
 # Copy application
 COPY src/ ./src/

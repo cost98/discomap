@@ -105,9 +105,6 @@ services:
       - GF_PANELS_DISABLE_SANITIZE_HTML=true
     volumes:
       - grafana-data:/var/lib/grafana
-      - ./grafana/grafana.ini:/etc/grafana/grafana.ini
-      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards
-      - ./grafana/datasources:/etc/grafana/provisioning/datasources
     ports:
       - "${GRAFANA_PORT:-3000}:3000"
     networks:

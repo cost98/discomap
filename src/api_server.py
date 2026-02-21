@@ -50,6 +50,13 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
+
+@app.get("/health")
+async def health_check():
+    """Root health check endpoint for Docker healthcheck."""
+    return {"status": "healthy"}
+
+
 # Include API v1 router
 app.include_router(v1_router)
 

@@ -20,7 +20,7 @@ class AggregateStatusResponse(BaseModel):
     total_rows: int
     first_day: Optional[datetime]
     last_day: Optional[datetime]
-    sampling_points: int
+    stations: int
     pollutants: int
     
     model_config = {
@@ -30,7 +30,7 @@ class AggregateStatusResponse(BaseModel):
                 "total_rows": 21309368,
                 "first_day": "2009-01-01T00:00:00Z",
                 "last_day": "2025-01-01T00:00:00Z",
-                "sampling_points": 7025,
+                "stations": 7025,
                 "pollutants": 7
             }
         }
@@ -116,7 +116,7 @@ async def get_aggregate_status():
                     COUNT(*) as total_rows,
                     MIN(day) as first_day,
                     MAX(day) as last_day,
-                    COUNT(DISTINCT sampling_point_id) as sampling_points,
+                    COUNT(DISTINCT station_code) as stations,
                     COUNT(DISTINCT pollutant_code) as pollutants
                 FROM airquality.daily_measurements
             """))
@@ -128,7 +128,7 @@ async def get_aggregate_status():
                 total_rows=row[0] or 0,
                 first_day=row[1],
                 last_day=row[2],
-                sampling_points=row[3] or 0,
+                stations=row[3] or 0,
                 pollutants=row[4] or 0
             )
             

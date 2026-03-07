@@ -43,7 +43,7 @@ def upgrade() -> None:
             MAX(m.time) as last_measurement
         FROM airquality.measurements m
         JOIN airquality.sampling_points sp ON m.sampling_point_id = sp.sampling_point_id
-        WHERE m.validity >= 1
+        WHERE m.validity >= 1 AND m.aggregation_type = 'hour'
         GROUP BY day, sp.station_code, m.pollutant_code
         WITH NO DATA
     """)

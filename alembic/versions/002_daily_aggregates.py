@@ -26,23 +26,25 @@ def upgrade() -> None:
     
     # Create continuous aggregate materialized view
     # Only includes valid measurements (validity >= 1)
+    # Aggregates by station_code (joining with sampling_points)
     op.execute("""
         CREATE MATERIALIZED VIEW airquality.daily_measurements
         WITH (timescaledb.continuous) AS
         SELECT 
-            time_bucket('1 day', time) AS day,
-            sampling_point_id,
-            pollutant_code,
-            AVG(value) as avg_value,
-            MIN(value) as min_value,
-            MAX(value) as max_value,
-            STDDEV(value) as stddev_value,
+            time_bucket('1 day', m.time) AS day,
+            sp.station_code,
+            m.pollutant_code,
+            AVG(m.value) as avg_value,
+            MIN(m.value) as min_value,
+            MAX(m.value) as max_value,
+            STDDEV(m.value) as stddev_value,
             COUNT(*) as count,
-            MIN(time) as first_measurement,
-            MAX(time) as last_measurement
-        FROM airquality.measurements
-        WHERE validity >= 1
-        GROUP BY day, sampling_point_id, pollutant_code
+            MIN(m.time) as first_measurement,
+            MAX(m.time) as last_measurement
+        FROM airquality.measurements m
+        JOIN airquality.sampling_points sp ON m.sampling_point_id = sp.sampling_point_id
+        WHERE m.validity >= 1
+        GROUP BY day, sp.station_code, m.pollutant_code
         WITH NO DATA
     """)
     
@@ -62,8 +64,8 @@ def upgrade() -> None:
     """)
     
     op.execute("""
-        CREATE INDEX idx_daily_measurements_sampling_point 
-        ON airquality.daily_measurements (sampling_point_id, day DESC)
+        CREATE INDEX idx_daily_measurements_station 
+        ON airquality.daily_measurements (station_code, day DESC)
     """)
     
     op.execute("""
@@ -79,7 +81,7 @@ def downgrade() -> None:
     
     # Drop indexes (automatically dropped with view, but explicit is better)
     op.execute("DROP INDEX IF EXISTS airquality.idx_daily_measurements_pollutant")
-    op.execute("DROP INDEX IF EXISTS airquality.idx_daily_measurements_sampling_point")
+    op.execute("DROP INDEX IF EXISTS airquality.idx_daily_measurements_station")
     op.execute("DROP INDEX IF EXISTS airquality.idx_daily_measurements_day")
     
     # Drop continuous aggregate (this also removes the policy)

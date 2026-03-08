@@ -66,31 +66,34 @@ class MeasurementRepository:
         if not measurements:
             return 0
         
-        from sqlalchemy.dialects.postgresql import insert
+        from sqlalchemy import text
         
-        # asyncpg ottimizza automaticamente batch INSERT con executemany
-        stmt = insert(Measurement.__table__).values(measurements)
+        # Usa SQL raw per batch upsert efficiente con asyncpg
+        # asyncpg.executemany gestisce il batch automaticamente
+        upsert_sql = """
+            INSERT INTO airquality.measurements (
+                time, sampling_point_id, pollutant_code, value, unit,
+                aggregation_type, validity, verification, data_capture,
+                result_time, observation_id
+            ) VALUES (
+                :time, :sampling_point_id, :pollutant_code, :value, :unit,
+                :aggregation_type, :validity, :verification, :data_capture,
+                :result_time, :observation_id
+            )
+            ON CONFLICT (time, sampling_point_id) DO UPDATE SET
+                pollutant_code = EXCLUDED.pollutant_code,
+                value = EXCLUDED.value,
+                unit = EXCLUDED.unit,
+                aggregation_type = EXCLUDED.aggregation_type,
+                validity = EXCLUDED.validity,
+                verification = EXCLUDED.verification,
+                data_capture = EXCLUDED.data_capture,
+                result_time = EXCLUDED.result_time,
+                observation_id = EXCLUDED.observation_id
+        """
         
-        # ON CONFLICT (time, sampling_point_id) DO UPDATE
-        # Aggiorna tutti i campi tranne le chiavi primarie
-        update_dict = {
-            "pollutant_code": stmt.excluded.pollutant_code,
-            "value": stmt.excluded.value,
-            "unit": stmt.excluded.unit,
-            "aggregation_type": stmt.excluded.aggregation_type,
-            "validity": stmt.excluded.validity,
-            "verification": stmt.excluded.verification,
-            "data_capture": stmt.excluded.data_capture,
-            "result_time": stmt.excluded.result_time,
-            "observation_id": stmt.excluded.observation_id,
-        }
-        
-        stmt = stmt.on_conflict_do_update(
-            index_elements=["time", "sampling_point_id"],
-            set_=update_dict
-        )
-        
-        await self.session.execute(stmt)
+        # asyncpg ottimizza automaticamente batch insert con executemany
+        await self.session.execute(text(upsert_sql), measurements)
         await self.session.flush()
         logger.info(f"Upserted {len(measurements)} measurements")
         return len(measurements)

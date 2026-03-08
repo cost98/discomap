@@ -66,20 +66,13 @@ class MeasurementRepository:
         if not measurements:
             return 0
         
-        from sqlalchemy import text
-        
-        # Usa SQL raw per batch upsert efficiente con asyncpg
-        # asyncpg.executemany gestisce il batch automaticamente
+        # SQL per upsert singolo record
         upsert_sql = """
             INSERT INTO airquality.measurements (
                 time, sampling_point_id, pollutant_code, value, unit,
                 aggregation_type, validity, verification, data_capture,
                 result_time, observation_id
-            ) VALUES (
-                :time, :sampling_point_id, :pollutant_code, :value, :unit,
-                :aggregation_type, :validity, :verification, :data_capture,
-                :result_time, :observation_id
-            )
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
             ON CONFLICT (time, sampling_point_id) DO UPDATE SET
                 pollutant_code = EXCLUDED.pollutant_code,
                 value = EXCLUDED.value,
@@ -92,9 +85,30 @@ class MeasurementRepository:
                 observation_id = EXCLUDED.observation_id
         """
         
-        # asyncpg ottimizza automaticamente batch insert con executemany
-        await self.session.execute(text(upsert_sql), measurements)
-        await self.session.flush()
+        # Prepara i dati come tuple per asyncpg.executemany
+        records = []
+        for m in measurements:
+            records.append((
+                m["time"],
+                m["sampling_point_id"],
+                m["pollutant_code"],
+                m.get("value"),
+                m.get("unit"),
+                m.get("aggregation_type"),
+                m.get("validity"),
+                m.get("verification"),
+                m.get("data_capture"),
+                m.get("result_time"),
+                m.get("observation_id"),
+            ))
+        
+        # Ottieni connessione raw asyncpg
+        conn = await self.session.connection()
+        raw_conn = await conn.get_raw_connection()
+        
+        # asyncpg.executemany è ottimizzato per batch upsert
+        await raw_conn.driver_connection.executemany(upsert_sql, records)
+        
         logger.info(f"Upserted {len(measurements)} measurements")
         return len(measurements)
 

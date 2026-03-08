@@ -140,6 +140,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(['sampling_point_id'], ['airquality.sampling_points.sampling_point_id'], ondelete='CASCADE'),
         sa.ForeignKeyConstraint(['validity'], ['airquality.validity_flags.validity_code'], ),
         sa.ForeignKeyConstraint(['verification'], ['airquality.verification_status.verification_code'], ),
+        sa.PrimaryKeyConstraint('time', 'sampling_point_id'),
         schema='airquality'
     )
     op.create_index('idx_measurements_pollutant', 'measurements', ['pollutant_code', 'time'], schema='airquality')
